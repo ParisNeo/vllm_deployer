@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.4 - 2025-11-09
+- Significantly enhanced `run.sh` error handling and user guidance:
+  - Comprehensive step-by-step instructions when MODEL_LIST is empty
+  - Detailed guidance on choosing, downloading, and configuring models
+  - Quick-start copy-paste commands for beginners
+  - Better error messages for missing model directories
+  - Guidance for missing config files with example commands
+  - Summary of loaded vs failed models
+  - Colored, formatted output for better readability
+  - Access instructions and test commands when server starts successfully
+
 ## 1.2.3 - 2025-11-09
 - Enhanced `pull_model.sh` with comprehensive help text and examples
 - Added popular model recommendations by size
