@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.3 - 2025-11-09
+- Enhanced `pull_model.sh` with comprehensive help text and examples
+- Added popular model recommendations by size
+- Added GPU memory requirement estimates
+- Added "Finding and Installing Models" section to README with:
+  - Model size categories and recommendations
+  - Step-by-step first model installation
+  - Quantized model information
+  - Authentication instructions for protected models
+  - Troubleshooting guide
+- Improved error messages in pull_model.sh
+
+## 1.2.2 - 2025-11-09
+- Added comprehensive Windows/WSL setup instructions to README
+- Included WSL2 installation steps
+- Added GPU support configuration for WSL
+- Added WSL-specific troubleshooting section
+- Documented filesystem performance considerations for WSL
+- Added workflow examples for both Linux and Windows users
+
 ## 1.2.1 - 2025-11-09
 - Enhanced `run.sh` with verbose output and error handling
 - Added configuration validation (checks for empty MODEL_LIST, missing directories)

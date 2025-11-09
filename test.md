@@ -1,3 +1,10 @@
+Here are the updated files with better guidance for finding and installing models:
+
+---
+
+### pull_model.sh (enhanced with examples and instructions)
+
+```bash
 #!/bin/bash
 
 # Usage: ./pull_model.sh model_name [model_dir]
@@ -151,3 +158,12 @@ echo "     ./run.sh"
 echo ""
 echo "Model location: $FULL_MODEL_PATH"
 echo "========================================="
+```
+
+***
+
+### README.md (add new comprehensive section before "Quick Start")
+
+Add this section after the "Requirements" section:
+
+```markdown
