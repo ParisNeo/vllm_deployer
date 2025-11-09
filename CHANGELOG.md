@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.1 - 2025-11-09
+- Enhanced `run.sh` with verbose output and error handling
+- Added configuration validation (checks for empty MODEL_LIST, missing directories)
+- Added colored output for better visibility
+- Added proper error messages when models or configs are missing
+- Added graceful shutdown with Ctrl+C handling
+
 ## 1.2.0 - 2025-11-09
 - Made systemd service creation optional in `install_vllm.sh`.
 - Added `manage_service.sh` script for installing and uninstalling the systemd service separately.
