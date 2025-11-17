@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
 const app = {
     state: {
         refreshInterval: null,
+        logWs: null,
     },
     api: {
         async get(endpoint) {
@@ -81,6 +82,7 @@ const app = {
                     <div class="flex items-center space-x-2">
                         ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
                         ${m.status_text !== 'starting' ? `<button onclick="app.openEditModal(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Edit</button>` : ''}
+                        ${m.status_text === 'running' ? `<button onclick="app.showRuntimeLogs(${m.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Logs</button>` : ''}
                         ${m.download_status === 'completed' && !m.is_running && m.status_text !== 'starting' && m.status_text !== 'error' ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
                         ${m.status_text === 'running' ? `<button onclick="app.stopModel(${m.id})" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Stop</button>` : ''}
                         <button onclick="app.deleteModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Delete</button>
@@ -153,6 +155,10 @@ const app = {
         },
         hideLogModal() {
             document.getElementById('log-modal').classList.add('hidden');
+            if (app.state.logWs) {
+                app.state.logWs.close();
+                app.state.logWs = null;
+            }
         },
         appendLog(text) {
             const pre = document.getElementById('log-pre');
@@ -160,12 +166,58 @@ const app = {
             pre.scrollTop = pre.scrollHeight;
         },
         showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
-        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
+        showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
+        hideAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.add('hidden'); },
+        renderAdminSettings(settings) {
+            const contentEl = document.getElementById('admin-settings-content');
+            const saveBtn = document.getElementById('save-admin-settings-btn');
+            let html = ``;
+
+            html += `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
+            
+            if (settings.is_password_env_managed) {
+                html += `<div class="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded relative" role="alert">
+                            <strong class="font-bold">Notice:</strong>
+                            <span class="block sm:inline"> The admin password is set via an environment variable and cannot be changed from the UI.</span>
+                         </div>`;
+                saveBtn.disabled = true;
+                saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                if(settings.is_using_default_password) {
+                    html += `<div class="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded relative mb-4" role="alert">
+                                <strong class="font-bold">Security Alert:</strong>
+                                <span class="block sm:inline"> You are using the default password. Please change it immediately.</span>
+                             </div>`;
+                }
+                html += `<form id="change-password-form" class="space-y-4">
+                            <div>
+                                <label for="current-password" class="block text-sm font-medium text-gray-300">Current Password</label>
+                                <input type="password" id="current-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="current-password">
+                            </div>
+                            <div>
+                                <label for="new-password" class="block text-sm font-medium text-gray-300">New Password</label>
+                                <input type="password" id="new-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="new-password">
+                            </div>
+                            <div>
+                                <label for="confirm-password" class="block text-sm font-medium text-gray-300">Confirm New Password</label>
+                                <input type="password" id="confirm-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="new-password">
+                            </div>
+                            <p id="password-change-error" class="text-red-400 text-sm hidden"></p>
+                         </form>`;
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            
+            contentEl.innerHTML = html;
+        }
     },
 
     async init() {
         document.getElementById('login-form').addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
         document.getElementById('toggle-password-btn').addEventListener('click', () => { this.togglePasswordVisibility(); });
+        document.getElementById('admin-settings-btn').addEventListener('click', () => this.openAdminSettingsModal());
+        document.getElementById('save-admin-settings-btn').addEventListener('click', () => this.changePassword());
         try {
             const auth = await this.api.get('/api/check-auth');
             if (auth.authenticated) {
@@ -225,35 +277,47 @@ const app = {
         }
     },
     
-    listenForLogs(wsPath, modalTitle) {
+    _listenToLogs(wsPath, modalTitle, onSpecialMessage = null) {
         this.ui.showLogModal(modalTitle);
+        if (this.state.logWs) { this.state.logWs.close(); }
+
         const ws = new WebSocket(`ws://${window.location.host}${wsPath}`);
+        this.state.logWs = ws;
+
         ws.onmessage = (event) => {
             const data = event.data;
-            if (data && data.startsWith('---') && data.endsWith('---')) {
-                const status = data.replaceAll('-', '').trim();
-                if (status.includes("SUCCESS") || status.includes("COMPLETE")) {
-                    this.ui.appendLog(`\n\n✅ ${status.replace('COMPLETE', 'SUCCESS')}\n`);
+            if (data.startsWith('---') && data.endsWith('---')) {
+                if (onSpecialMessage) {
+                    onSpecialMessage(data); // Callback handles special messages
                 } else {
-                    this.ui.appendLog(`\n\n❌ ${status}\n`);
+                    const status = data.replaceAll('-', '').trim();
+                    this.ui.appendLog(`\n\nℹ️ ${status}\n`);
                 }
-                ws.close();
-            } else if (data) {
+            } else {
                 this.ui.appendLog(data);
             }
         };
         ws.onerror = () => this.ui.appendLog(`\n\n❌ WebSocket Error\n`);
         ws.onclose = () => {
-            this.loadDashboard();
+            if (this.state.logWs === ws) { 
+                this.state.logWs = null;
+            }
+            if (wsPath.startsWith('/ws/pull') || wsPath.startsWith('/ws/upgrade')) {
+                this.loadDashboard();
+            }
         };
     },
-
+    
     async pullModel() {
         const hf_model_id = document.getElementById('hf-model-id').value;
         if (!hf_model_id) return alert('Please enter a HuggingFace Model ID.');
         try {
             const res = await this.api.post('/api/models/pull', { hf_model_id });
-            this.listenForLogs(`/ws/pull/${res.model_id}`, `Downloading ${hf_model_id}`);
+            this._listenToLogs(`/ws/pull/${res.model_id}`, `Downloading ${hf_model_id}`, (message) => {
+                const status = message.replaceAll('-', '').trim();
+                this.ui.appendLog(`\n\n✅ ${status}\n`);
+                this.state.logWs?.close();
+            });
         } catch (e) {
             alert('Error starting download: ' + e.message);
         }
@@ -273,17 +337,35 @@ const app = {
         try {
             const models = await this.api.get('/api/models');
             const model = models.find(m => m.id === id);
-            if (!model) {
-                alert('Model not found to start');
-                return;
-            }
+            if (!model) throw new Error('Model not found');
+            
             await this.api.post(`/api/models/${id}/start`);
-            this.loadModels();
-            this.listenForLogs(`/ws/start/${id}`, `Starting ${model.name}`);
-        }
-        catch (e) {
+            this.loadModels(); // Update UI to show "starting"
+
+            this._listenToLogs(`/ws/logs/${id}`, `Starting ${model.name}`, (message) => {
+                const status = message.replaceAll('-', '').trim();
+                const isSuccess = status.includes("SUCCESS");
+                this.ui.appendLog(`\n\n${isSuccess ? '✅' : '❌'} ${status}\n`);
+                
+                setTimeout(() => {
+                    this.hideLogModal();
+                    this.loadDashboard();
+                }, 1500);
+            });
+        } catch (e) {
             alert('Failed to start model: ' + e.message);
             this.loadModels();
+        }
+    },
+
+    async showRuntimeLogs(id) {
+        try {
+            const models = await this.api.get('/api/models');
+            const model = models.find(m => m.id === id);
+            if (!model) throw new Error('Model not found');
+            this._listenToLogs(`/ws/logs/${id}`, `Logs for ${model.name}`);
+        } catch (e) {
+            alert('Could not get logs: ' + e.message);
         }
     },
 
@@ -316,7 +398,11 @@ const app = {
         if (confirm('This will upgrade vLLM and may require a manager restart. Proceed?')) {
             try {
                 await this.api.post('/api/system/upgrade');
-                this.listenForLogs('/ws/upgrade', 'Upgrading vLLM');
+                this._listenToLogs('/ws/upgrade', 'Upgrading vLLM', (message) => {
+                     const status = message.replaceAll('-', '').trim();
+                     this.ui.appendLog(`\n\n✅ ${status}\n`);
+                     this.state.logWs?.close();
+                });
             } catch (e) {
                 alert('Failed to start upgrade: ' + e.message);
             }
@@ -336,10 +422,6 @@ const app = {
             eyeOpen.classList.remove('hidden');
             eyeClosed.classList.add('hidden');
         }
-    },
-
-    hideLogModal() {
-        this.ui.hideLogModal();
     },
     
     async openEditModal(modelId) {
@@ -390,5 +472,51 @@ const app = {
 
     hideEditModal() {
         this.ui.hideEditModal();
+    },
+
+    async openAdminSettingsModal() {
+        try {
+            const settings = await this.api.get('/api/admin/settings');
+            this.ui.renderAdminSettings(settings);
+            this.ui.showAdminSettingsModal();
+        } catch (e) {
+            alert('Could not load admin settings: ' + e.message);
+        }
+    },
+
+    hideAdminSettingsModal() {
+        this.ui.hideAdminSettingsModal();
+    },
+
+    async changePassword() {
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const errorEl = document.getElementById('password-change-error');
+        
+        errorEl.classList.add('hidden');
+
+        if (!newPassword || newPassword !== confirmPassword) {
+            errorEl.textContent = 'New passwords do not match or are empty.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+        if (!currentPassword) {
+            errorEl.textContent = 'Current password is required.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            await this.api.post('/api/admin/change-password', {
+                current_password: currentPassword,
+                new_password: newPassword
+            });
+            alert('Password changed successfully!');
+            this.hideAdminSettingsModal();
+        } catch (e) {
+            errorEl.textContent = 'Failed to change password: ' + e.message;
+            errorEl.classList.remove('hidden');
+        }
     }
 };
