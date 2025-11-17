@@ -70,7 +70,13 @@
 
                 <!-- Models List -->
                 <div class="mt-8">
-                    <h2 class="text-2xl font-bold mb-4">Managed Models</h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Managed Models</h2>
+                        <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 11h5v5H4v-5zm11-11h5v5h-5V4zm0 11h5v5h-5v-5z" /></svg>
+                            <span>Scan Folder</span>
+                        </button>
+                    </div>
                     <div id="model-list" class="space-y-4"></div>
                 </div>
             </main>

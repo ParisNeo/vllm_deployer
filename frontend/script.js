@@ -15,13 +15,10 @@ const app = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            // For login, backend redirects and sets cookie, so a simple ok check is enough.
-            // The key is that the browser now has the cookie for subsequent requests.
             if (!res.ok) {
-                 const error = await res.json().catch(() => ({ detail: 'Login failed' }));
+                 const error = await res.json().catch(() => ({ detail: 'Request failed' }));
                  throw new Error(error.detail);
             }
-             // For login, we don't need to parse JSON as the server might not return a body on success.
             if (endpoint === '/api/login') return { success: true };
             return res.json();
         },
@@ -41,7 +38,7 @@ const app = {
         renderModelList(models) {
             const listEl = document.getElementById('model-list');
             if (models.length === 0) {
-                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model to get started.</div>`;
+                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model or scan the models folder to get started.</div>`;
                 return;
             }
             listEl.innerHTML = models.map(m => `
@@ -120,9 +117,6 @@ const app = {
         try {
             const res = await this.api.post('/api/login', { username, password });
             if (res.success) {
-                // On successful login, re-initialize the app state.
-                // This will trigger the auth check again, which will now pass
-                // because the cookie is set, and then render the dashboard.
                 await this.init();
             }
         } catch (e) {
@@ -133,15 +127,16 @@ const app = {
 
     async logout() {
         await this.api.post('/api/logout', {});
-        // After logout, re-init to show the login page
         await this.init();
     },
 
     async loadDashboard() {
         try {
-            const models = await this.api.get('/api/models');
+            const [models, sysInfo] = await Promise.all([
+                this.api.get('/api/models'),
+                this.api.get('/api/system/info')
+            ]);
             this.ui.renderModelList(models);
-            const sysInfo = await this.api.get('/api/system/info');
             this.ui.renderSystemInfo(sysInfo);
         } catch (e) {
             console.error("Failed to load dashboard data", e);
@@ -175,6 +170,16 @@ const app = {
             this.listenForLogs(`/ws/pull/${res.model_id}`, `Downloading ${hf_model_id}`);
         } catch (e) {
             alert('Error starting download: ' + e.message);
+        }
+    },
+
+    async scanModelsFolder() {
+        try {
+            const res = await this.api.post('/api/models/scan');
+            alert(res.message);
+            this.loadDashboard();
+        } catch (e) {
+            alert('Failed to scan models folder: ' + e.message);
         }
     },
 

@@ -20,7 +20,7 @@ from threading import Thread
 import queue
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -278,14 +278,16 @@ async def login(req: LoginRequest):
     if req.username != ADMIN_USERNAME or hash_password(req.password) != ADMIN_PASSWORD_HASH:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_session(req.username)
-    res = FileResponse("frontend/index.html"); res.set_cookie(key="session_token", value=token, httponly=True, max_age=SESSION_TIMEOUT, samesite="lax")
+    res = JSONResponse(content={"success": True})
+    res.set_cookie(key="session_token", value=token, httponly=True, max_age=SESSION_TIMEOUT, samesite="lax")
     return res
 
 @app.post("/api/logout")
 async def logout(request: Request):
     token = request.cookies.get("session_token")
     if token in sessions: del sessions[token]; save_sessions()
-    res = FileResponse("frontend/index.html"); res.delete_cookie("session_token")
+    res = JSONResponse(content={"success": True})
+    res.delete_cookie("session_token")
     return res
 
 @app.get("/api/check-auth")
@@ -315,6 +317,49 @@ async def pull_model(req: PullModelRequest, db: SessionLocal = Depends(get_db), 
     thread = Thread(target=download_model_task, args=(new_model.id, req.hf_model_id, model_name))
     download_tasks[new_model.id] = {'thread': thread}; thread.start()
     return {"success": True, "model_id": new_model.id}
+
+@app.post("/api/models/scan")
+async def scan_models_folder(db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
+    if not MODEL_DIR.exists():
+        raise HTTPException(status_code=404, detail="Models directory not found.")
+    
+    existing_model_names = {m.name for m in db.query(Model.name).all()}
+    imported_count = 0
+    
+    for entry in os.scandir(MODEL_DIR):
+        if entry.is_dir() and entry.name not in existing_model_names:
+            model_path = Path(entry.path)
+            config_file = model_path / "config.json"
+            if not config_file.exists():
+                continue
+
+            model_name = entry.name
+            total_size = sum(f.stat().st_size for f in model_path.glob('**/*') if f.is_file())
+            size_gb = total_size / (1024**3)
+            model_type = ModelType.TEXT
+            
+            with open(config_file) as f:
+                config_data = json.load(f)
+                if any(k in config_data for k in ['pooling', 'sentence_transformers', 'embedding']):
+                    model_type = ModelType.EMBEDDING
+            
+            new_model = Model(
+                name=model_name,
+                hf_model_id=f"local/{model_name}",
+                path=str(model_path),
+                model_type=model_type,
+                download_status="completed",
+                size_gb=size_gb
+            )
+            db.add(new_model)
+            imported_count += 1
+    
+    if imported_count > 0:
+        db.commit()
+        return {"success": True, "message": f"Successfully imported {imported_count} new model(s)."}
+    
+    return {"success": True, "message": "No new models found to import."}
+
 
 @app.websocket("/ws/pull/{model_id}")
 async def pull_model_ws(websocket: WebSocket, model_id: int):
@@ -397,10 +442,7 @@ app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 @app.get("/")
 async def read_index(request: Request):
-    token = request.cookies.get("session_token")
-    if verify_session(token):
-        return FileResponse('frontend/index.html')
-    return FileResponse('frontend/index.html') # Let JS handle login redirect
+    return FileResponse('frontend/index.html')
 
 if __name__ == "__main__":
     import uvicorn
