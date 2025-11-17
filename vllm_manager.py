@@ -527,4 +527,5 @@ async def read_index(request: Request): return FileResponse('frontend/index.html
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=MANAGER_PORT)```
+    uvicorn.run(app, host="0.0.0.0", port=MANAGER_PORT)
+    
