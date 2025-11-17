@@ -5,6 +5,48 @@ All notable changes to the vLLM Deployer project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2025-11-17
+
+### 🚀 Major Release: Database-Driven Management
+
+This version represents a fundamental shift from file-based configuration to a database-driven architecture with a fully-featured Web UI for all model management tasks.
+
+### Added
+
+- **Database Backend**:
+  - Integrated SQLite for persistent storage of models and configurations.
+  - Models are now managed as database entries, providing a single source of truth.
+- **UI-Based Model Pulling**:
+  - New "Pull Model" feature in the Web UI to download models directly from Hugging Face.
+  - Real-time download progress and logs are streamed to the UI.
+  - Automatic detection of model size and type upon download.
+- **UI-Based Model Management**:
+  - Full CRUD (Create, Read, Update, Delete) for models via the UI.
+  - A modal interface for editing model parameters like GPU memory, context length, etc.
+  - "Delete" functionality removes the model from the database and the filesystem.
+- **Centralized Model Catalog**:
+  - The UI now displays all managed models from the database, regardless of their running state.
+  - Status indicators for `Not Downloaded`, `Downloading`, `Completed`, and `Error`.
+
+### Changed
+
+- **Workflow Overhaul**: The primary workflow is now centered around the Web UI. `run.sh` starts the manager, and all subsequent actions are performed in the browser.
+- **Configuration Management**: Model configurations (e.g., `max-model-len`, `gpu-memory-utilization`) are now stored in the database and managed via the UI, deprecating `vllm_config.yaml` files.
+- **`run.sh` Script**: Now serves as the primary launcher for the vLLM Manager, replacing `start_manager.sh`.
+- **State Persistence**: The manager's state is fully persisted in the SQLite database, replacing the previous `vllm_manager_state.json` file.
+
+### Removed
+
+- **`pull_model.sh`**: This script has been removed. Model downloading is now handled exclusively through the Web UI.
+- **`start_manager.sh`**: Its functionality has been merged into the simplified `run.sh` script.
+- **`MODEL_LIST` from `.env`**: This configuration variable is no longer used, as the model list is managed in the database.
+- **YAML Configuration**: Per-model `vllm_config.yaml` files are no longer created or used.
+
+### Breaking Changes
+
+- **Manager-Centric Workflow**: The previous script-based workflow for adding and running models is deprecated. All model management must now be done through the vLLM Manager's Web UI.
+- **Configuration Migration**: Existing models configured with YAML files and `MODEL_LIST` will not be automatically recognized. They must be re-added through the UI's "Pull Model" feature to be managed by the new system.
+
 ## [2.0.0] - 2025-11-09
 
 ### 🚀 Major Release: vLLM Manager Pro
@@ -255,6 +297,7 @@ To upgrade from previous version:
 
 ## Version History Summary
 
+- **3.0.0** - Database-driven management with UI for model pulling/configuration
 - **2.0.0** - vLLM Manager Pro with Web UI, authentication, and advanced features
 - **1.3.3** - YAML config support (critical bug fix)
 - **1.3.2** - Enhanced installer with detailed feedback

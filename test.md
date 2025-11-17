@@ -158,12 +158,4 @@ echo "     ./run.sh"
 echo ""
 echo "Model location: $FULL_MODEL_PATH"
 echo "========================================="
-```
 
-***
-
-### README.md (add new comprehensive section before "Quick Start")
-
-Add this section after the "Requirements" section:
-
-```markdown

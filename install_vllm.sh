@@ -270,21 +270,12 @@ echo ""
 print_step 6 $TOTAL_STEPS "Installing management interface dependencies"
 echo ""
 
-print_info "Installing FastAPI, Uvicorn, and utilities..."
-pip install fastapi uvicorn httpx psutil --quiet
+print_info "Installing FastAPI, Uvicorn, SQLAlchemy, and utilities..."
+pip install fastapi uvicorn httpx psutil gputil pydantic sqlalchemy huggingface-hub --quiet
 if [ $? -eq 0 ]; then
     print_success "Management dependencies installed"
 else
     print_warning "Some dependencies may have issues, but continuing..."
-fi
-
-# Optional: Install huggingface-hub for model downloading
-print_info "Installing Hugging Face Hub client..."
-pip install huggingface-hub --quiet
-if [ $? -eq 0 ]; then
-    print_success "Hugging Face Hub client installed"
-else
-    print_warning "Hugging Face Hub client installation had issues"
 fi
 
 echo ""
@@ -299,11 +290,9 @@ echo ""
 # List of scripts to copy
 SCRIPTS_TO_COPY=(
     "run.sh"
-    "pull_model.sh"
     "manage_service.sh"
     "upgrade_vllm.sh"
     "vllm_manager.py"
-    "start_manager.sh"
 )
 
 print_info "Copying deployment scripts..."
@@ -332,9 +321,7 @@ cat > "$INSTALL_DIR/.env" <<EOL
 # Model storage directory
 MODEL_DIR=$MODEL_DIR
 
-# Comma-separated list of models to serve (format: model_name:config_file)
-# Example: MODEL_LIST='opt-125m:vllm_config.json,mistral-7b:vllm_config.json'
-MODEL_LIST=''
+# Models are now managed via the Web UI (http://localhost:9000)
 
 # Default port for vLLM server (when using run.sh)
 VLLM_PORT=8000
@@ -370,27 +357,26 @@ cat > "$INSTALL_DIR/QUICKSTART.txt" <<'EOL'
 GETTING STARTED
 ───────────────
 
-1. Download a Model
+1. Start the Manager
    ────────────────
-   ./pull_model.sh facebook/opt-125m
-   
-   This will:
-   • Download the model from Hugging Face
-   • Create a configuration file
-   • Automatically add it to .env
+   ./run.sh   
 
-2. Start the Server
+2. Open the Web UI
    ────────────────
-   ./run.sh
-   
-   Or use the management interface:
-   ./start_manager.sh
-   
-   Then in another terminal:
-   curl -X POST http://localhost:9000/models/opt-125m/start
+   Open http://localhost:9000 in your browser.
+   Login with default credentials:
+     - Username: admin
+     - Password: admin123
 
-3. Test Your Model
+3. Download and Run a Model
+   ────────────────
+   - Use the UI to pull a model (e.g., facebook/opt-125m).
+   - Once downloaded, click "Start" next to the model.
+
+4. Test Your Model
    ───────────────
+   Once a model is running (e.g., on port 8000), you can test it:
+   
    curl http://localhost:8000/v1/models
    
    Or send a test message:
@@ -400,24 +386,22 @@ GETTING STARTED
 
 AVAILABLE COMMANDS
 ──────────────────
-
-./pull_model.sh <model_name>     - Download a model from Hugging Face
-./run.sh                          - Start vLLM server with configured models
-./start_manager.sh                - Start the management API interface
+./run.sh                          - Start the vLLM Manager Web UI
 ./manage_service.sh install       - Install as systemd service
 ./manage_service.sh uninstall     - Remove systemd service
 ./upgrade_vllm.sh                 - Upgrade vLLM to latest version
 
-MANAGEMENT API
-──────────────
+MANAGEMENT UI
+─────────────
+Web Interface: http://localhost:9000
+API docs:      http://localhost:9000/docs
 
-Start manager: ./start_manager.sh
-API docs: http://localhost:9000/docs
-
-List models:    curl http://localhost:9000/models
-Start model:    curl -X POST http://localhost:9000/models/MODEL_NAME/start
-Stop model:     curl -X POST http://localhost:9000/models/MODEL_NAME/stop
-Check status:   curl http://localhost:9000/models/status
+From the UI, you can:
+  • Pull new models from Hugging Face
+  • Start, stop, and restart models
+  • Monitor GPU usage
+  • Configure model parameters
+  • Delete models
 
 RECOMMENDED MODELS FOR TESTING
 ───────────────────────────────
@@ -432,15 +416,14 @@ Medium (production ready):
 
 TROUBLESHOOTING
 ───────────────
-
-No models configured:
-  → Run: ./pull_model.sh facebook/opt-125m
+No models available:
+  → Use the Web UI to pull a model.
 
 vLLM not found:
   → Activate venv: source venv/bin/activate
 
 Out of memory:
-  → Try a smaller model or adjust gpu_memory_utilization in config
+  → Try a smaller model or adjust gpu_memory_utilization in the UI config.
 
 DOCUMENTATION
 ─────────────
@@ -480,44 +463,21 @@ echo ""
 echo -e "${GREEN}1.${NC} Navigate to installation directory:"
 echo -e "   ${BLUE}cd $INSTALL_DIR${NC}"
 echo ""
-echo -e "${GREEN}2.${NC} Download your first model (recommended for testing):"
-echo -e "   ${BLUE}./pull_model.sh facebook/opt-125m${NC}"
-echo ""
-echo -e "${GREEN}3.${NC} Start the server:"
+echo -e "${GREEN}2.${NC} Start the vLLM manager:"
 echo -e "   ${BLUE}./run.sh${NC}"
 echo ""
-echo -e "   ${CYAN}Or use the management interface:${NC}"
-echo -e "   ${BLUE}./start_manager.sh${NC}"
+echo -e "${GREEN}3.${NC} Open the Web UI in your browser at ${BLUE}http://localhost:9000${NC}"
+echo "   Login with 'admin' / 'admin123' and pull your first model."
 echo ""
 echo -e "${GREEN}4.${NC} (Optional) Install as a system service:"
 echo -e "   ${BLUE}./manage_service.sh install${NC}"
 echo ""
 
-echo -e "${CYAN}Quick Reference:${NC}"
-echo "────────────────────────────────────────"
-echo "  View quick start:   cat QUICKSTART.txt"
-echo "  List all commands:  ls -lh *.sh"
-echo "  Check vLLM:        source venv/bin/activate && vllm --version"
-echo "  Get help:          ./pull_model.sh (without arguments)"
-echo ""
-
 echo -e "${MAGENTA}Management Interface:${NC}"
 echo "────────────────────────────────────────"
-echo "  Start manager:     ./start_manager.sh"
+echo "  Start manager:     ./run.sh"
 echo "  API docs:          http://localhost:9000/docs"
 echo "  Interactive UI:    http://localhost:9000"
-echo ""
-
-echo -e "${YELLOW}Important Notes:${NC}"
-echo "────────────────────────────────────────"
-if [ "$DEV_MODE" = true ]; then
-    print_warning "Development mode: vLLM installed from source"
-    echo "  Source location: $INSTALL_DIR/vllm-source"
-    echo "  To update: cd vllm-source && git pull && pip install -e ."
-else
-    print_info "Stable mode: vLLM installed from PyPI"
-    echo "  To upgrade: ./upgrade_vllm.sh"
-fi
 echo ""
 
 echo -e "${GREEN}For detailed documentation, see README.md${NC}"
