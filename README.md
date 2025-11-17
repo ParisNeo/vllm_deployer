@@ -30,6 +30,7 @@ vLLM Deployer provides a complete toolkit for installing, configuring, and manag
 - [Platform Support](#platform-support)
 - [Understanding Models](#understanding-models)
 - [Quick Start](#quick-start)
+- [Security](#security)
 - [Installation](#installation)
 - [Windows/WSL Setup](#windowswsl-setup)
 - [Finding and Installing Models](#finding-and-installing-models)
@@ -123,20 +124,66 @@ Before starting, it's important to understand model sizes and GPU requirements.
 
 **Get running in 3 commands:**
 
-```
+```bash
 # 1. Install vLLM Deployer
 git clone https://github.com/ParisNeo/vllm_deployer.git
 cd vllm_deployer
 bash install_vllm.sh
 
-# 2. Download a model (automatically configured)
-./pull_model.sh facebook/opt-125m
+# 2. (Recommended) Change the default password
+./reset_password.sh
 
-# 3. Start serving
+# 3. Start the manager
 ./run.sh
 ```
 
-That's it! Your model is now running at `http://localhost:8000`.
+Now open `http://localhost:9000` in your browser, log in, and pull your first model from the UI.
+
+## 🔒 Security
+
+### Default Credentials
+
+The default login for the Web UI is:
+- **Username**: `admin`
+- **Password**: `admin123`
+
+**It is strongly recommended to change the default password immediately after installation.**
+
+### Changing the Password
+
+You can change the password in two ways:
+
+#### 1. Using the Reset Script (Recommended)
+
+The easiest way to reset your password is to use the provided script.
+
+```bash
+# Navigate to your installation directory
+cd /path/to/vllm_app
+
+# Run the script and follow the prompts
+./reset_password.sh
+```
+
+This will securely prompt you for a new password and automatically update your configuration. Remember to restart the manager for the new password to take effect.
+
+#### 2. Using Environment Variables
+
+For production or containerized environments, you can set the password hash directly using an environment variable.
+
+1.  **Generate the hash for your new password:**
+    ```bash
+    echo -n 'your_secure_password' | sha256sum
+    ```
+    This will output a hash string, e.g., `5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8`.
+
+2.  **Set the environment variable:**
+    ```bash
+    export VLLM_ADMIN_PASSWORD_HASH='your_hash_here'
+    ```
+    To make this permanent, add the `export` command to your shell profile (e.g., `~/.bashrc` or `~/.zshrc`).
+
+**Note:** The `VLLM_ADMIN_PASSWORD_HASH` environment variable will always override the setting in the `.env` file if both are present.
 
 ## 📥 Installation
 
@@ -342,463 +389,113 @@ Get-NetAdapter | Where-Object Name -like "*WSL*" | Restart-NetAdapter
 
 ## 🔍 Finding and Installing Models
 
-### How to Find Models
+All model management is now handled through the Web UI.
 
-**1. Browse Hugging Face Hub**
-- Visit [huggingface.co/models](https://huggingface.co/models)
-- Filter by "Text Generation" task
-- Sort by "Most Downloads" or "Trending"
-- Check the model card for requirements and license
-
-**2. Check vLLM Compatibility**
-- Visit [vLLM Supported Models](https://docs.vllm.ai/en/latest/models/supported_models.html)
-- Supported architectures include:
-  - LLaMA, LLaMA-2, LLaMA-3
-  - Mistral, Mixtral
-  - GPT-2, GPT-J, GPT-NeoX
-  - OPT, BLOOM, Falcon
-  - Qwen, Phi, Gemma
-  - And many more!
-
-**3. Verify Model Requirements**
-- Check model size vs your GPU memory
-- Review license terms (some require agreement)
-- Look for quantized versions if memory is limited
-
-### Downloading Models
-
-**Basic syntax:**
-```
-./pull_model.sh <huggingface_model_name>
-```
-
-**Examples:**
-```
-# Small test model
-./pull_model.sh facebook/opt-125m
-
-# Production-ready model
-./pull_model.sh mistralai/Mistral-7B-Instruct-v0.2
-
-# Large model
-./pull_model.sh meta-llama/Llama-2-7b-chat-hf
-```
-
-### What Happens During Download
-
-The script automatically:
-1. ✅ Downloads the model from Hugging Face
-2. ✅ Stores it in your models directory
-3. ✅ Creates a default `vllm_config.json` file
-4. ✅ **Adds the model to your `.env` configuration**
-5. ✅ Provides next steps
-
-**No manual configuration needed!**
-
-### Installing Your First Model
-
-**Step-by-step example:**
-
-```
-# 1. Navigate to installation directory
-cd /path/to/vllm_app
-
-# 2. View available model options
-./pull_model.sh
-
-# 3. Download a beginner-friendly model
-./pull_model.sh facebook/opt-125m
-
-# 4. The model is automatically configured - just run!
-./run.sh
-```
-
-### Multiple Models
-
-Download multiple models - they're all added automatically:
-
-```
-./pull_model.sh facebook/opt-125m
-./pull_model.sh facebook/opt-1.3b
-./pull_model.sh microsoft/phi-2
-
-# Check your configuration
-cat .env
-# MODEL_LIST='opt-125m:vllm_config.json,opt-1.3b:vllm_config.json,phi-2:vllm_config.json'
-```
+1.  **Start the manager:** `./run.sh`
+2.  **Open the UI:** `http://localhost:9000`
+3.  **Pull a model:** Use the "Pull New Model" form, entering the Hugging Face model ID (e.g., `mistralai/Mistral-7B-Instruct-v0.2`).
+4.  **Monitor progress:** A log window will appear, showing the download progress in real-time.
+5.  **Start the model:** Once downloaded, the model will appear in your "Managed Models" list. Click "Start" to launch it.
 
 ### Protected Models (Gated Models)
 
-Some models require Hugging Face authentication:
+If you need to download a model that requires authentication (like Llama 3), you must first log in via the command line on the server where the manager is running:
 
-```
+```bash
+# Activate the virtual environment
+source venv/bin/activate
+
 # Login to Hugging Face
 huggingface-cli login
 
 # Enter your token when prompted
-
-# Now download gated models
-./pull_model.sh meta-llama/Llama-2-7b-chat-hf
 ```
 
-Get your token from: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-
-### Quantized Models
-
-For limited GPU memory, use quantized models:
-
-```
-# Search for GPTQ or AWQ models on Hugging Face
-./pull_model.sh TheBloke/Llama-2-7B-Chat-GPTQ
-```
-
-Benefits:
-- 4-bit precision (~75% memory reduction)
-- Faster inference
-- Minimal quality loss
+Once you have logged in, you can pull the gated model through the Web UI as usual.
 
 ## ⚙️ Configuration
 
 ### The .env File
 
-Located in your installation directory, this file controls all settings:
+Located in your installation directory, this file controls core settings:
 
 ```
 # Model storage location
 MODEL_DIR=/path/to/models
 
-# Models to serve (automatically updated by pull_model.sh)
-MODEL_LIST='opt-125m:vllm_config.json,mistral-7b:vllm_config.json'
-
-# Default server port
+# Default server port (not used by manager)
 VLLM_PORT=8000
 
 # Installation mode (stable or dev)
 DEV_MODE=false
+
+# Admin password hash (set by reset_password.sh)
+VLLM_ADMIN_PASSWORD_HASH='...'
 ```
 
 ### Per-Model Configuration
 
-Each model has a `vllm_config.json` file in its directory:
-
-```
-{
-  "max_model_len": 2048,
-  "gpu_memory_utilization": 0.9,
-  "tensor_parallel_size": 1,
-  "dtype": "auto",
-  "quantization": null
-}
-```
-
-**Key parameters:**
-- `max_model_len`: Maximum sequence length
-- `gpu_memory_utilization`: GPU memory fraction (0.0-1.0)
-- `tensor_parallel_size`: Number of GPUs for tensor parallelism
-- `dtype`: Data type (`auto`, `float16`, `bfloat16`, `float32`)
-- `quantization`: Quantization method (`awq`, `gptq`, `squeezellm`, `null`)
-
-### Advanced Configuration Examples
-
-**Multi-GPU setup (tensor parallelism):**
-```
-{
-  "tensor_parallel_size": 4,
-  "gpu_memory_utilization": 0.95,
-  "max_model_len": 4096
-}
-```
-
-**Memory-constrained setup:**
-```
-{
-  "gpu_memory_utilization": 0.7,
-  "max_model_len": 1024,
-  "dtype": "float16"
-}
-```
-
-**Quantized model:**
-```
-{
-  "quantization": "gptq",
-  "dtype": "float16",
-  "gpu_memory_utilization": 0.9
-}
-```
+Model-specific configuration is now managed directly in the Web UI. After a model is downloaded, you can edit its settings before starting it.
 
 ## 🎮 Usage
 
-### Simple Server (run.sh)
+### Starting the Manager
 
-Start vLLM with all configured models:
+The primary way to use the system is through the vLLM Manager.
 
-```
+```bash
 cd /path/to/install_dir
 ./run.sh
 ```
 
-The script will:
-- Load configuration from `.env`
-- Validate all models exist
-- Start vLLM server(s)
-- Display access information
+This starts the web server. Access the UI at `http://localhost:9000`.
 
-**Stop the server:** Press `Ctrl+C`
+From the UI, you can:
+- Pull, configure, start, stop, and delete models.
+- Monitor system resources and GPU usage.
+- Upgrade the vLLM installation.
 
-### Testing Your Server
+### Testing a Running Model
 
-**List models:**
-```
+Once you start a model from the UI, it will be assigned a port (e.g., 8000). You can then test it using `curl`.
+
+**List models (verifies the server is running):**
+```bash
 curl http://localhost:8000/v1/models
 ```
 
 **Send a completion request:**
-```
+```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "opt-125m",
+    "model": "your-model-name",
     "messages": [
       {"role": "user", "content": "Hello! Tell me a joke."}
-    ],
-    "max_tokens": 100,
-    "temperature": 0.7
-  }'
-```
-
-**Streaming response:**
-```
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "opt-125m",
-    "messages": [{"role": "user", "content": "Count to 10"}],
-    "stream": true
+    ]
   }'
 ```
 
 ## 🎛️ Management Interface
 
-The FastAPI-based management interface provides dynamic control over multiple vLLM instances.
+The FastAPI-based management interface provides dynamic control over vLLM instances via a modern web UI and a REST API.
 
 ### Starting the Manager
 
-```
-cd /path/to/install_dir
-./start_manager.sh
+```bash
+./run.sh
 ```
 
-Access:
-- API Server: `http://localhost:9000`
-- Interactive Docs: `http://localhost:9000/docs`
-- ReDoc: `http://localhost:9000/redoc`
+- **Web UI**: `http://localhost:9000`
+- **API Docs**: `http://localhost:9000/docs`
 
 ### Key Features
 
-- ✅ Start/stop models dynamically
-- ✅ Monitor resource usage (memory, CPU, uptime)
-- ✅ Health checking
-- ✅ Dynamic port allocation
-- ✅ GPU assignment per model
-- ✅ Request proxying to correct model
-- ✅ Persistent state across restarts
-
-### API Endpoints
-
-#### List Available Models
-```
-curl http://localhost:9000/models
-```
-
-#### Start a Model
-```
-curl -X POST http://localhost:9000/models/opt-125m/start
-```
-
-**With custom configuration:**
-```
-curl -X POST http://localhost:9000/models/mistral-7b/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "mistral-7b",
-    "port": 8001,
-    "gpu_ids": "0,1",
-    "gpu_memory_utilization": 0.95,
-    "tensor_parallel_size": 2
-  }'
-```
-
-#### Check Model Status
-```
-curl http://localhost:9000/models/status
-```
-
-**Response example:**
-```
-{
-  "models": [
-    {
-      "name": "opt-125m",
-      "status": "running",
-      "port": 8000,
-      "pid": 12345,
-      "gpu_ids": "0",
-      "uptime": "2h 15m",
-      "memory_usage": 512.5
-    }
-  ]
-}
-```
-
-#### Stop a Model
-```
-curl -X POST http://localhost:9000/models/opt-125m/stop
-```
-
-#### Stop All Models
-```
-curl -X DELETE http://localhost:9000/models/stop-all
-```
-
-#### Proxy Chat Completion
-```
-curl -X POST http://localhost:9000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "opt-125m",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-```
-
-### Management Workflows
-
-**Multi-model deployment:**
-```
-# Start manager
-./start_manager.sh
-
-# In another terminal, start multiple models
-curl -X POST http://localhost:9000/models/opt-125m/start
-curl -X POST http://localhost:9000/models/phi-2/start
-curl -X POST http://localhost:9000/models/mistral-7b/start
-
-# Check what's running
-curl http://localhost:9000/models/status
-
-# Use different models via proxy
-curl -X POST http://localhost:9000/v1/chat/completions \
-  -d '{"model": "opt-125m", "messages": [{"role": "user", "content": "Hi"}]}'
-
-curl -X POST http://localhost:9000/v1/chat/completions \
-  -d '{"model": "mistral-7b", "messages": [{"role": "user", "content": "Hi"}]}'
-```
-
-**Dynamic scaling:**
-```
-# Start small model for testing
-curl -X POST http://localhost:9000/models/opt-125m/start
-
-# Switch to larger model for production
-curl -X POST http://localhost:9000/models/opt-125m/stop
-curl -X POST http://localhost:9000/models/mistral-7b/start
-```
-
-## 🔀 Multi-Model Serving
-
-### How It Works
-
-**Important:** vLLM does not support multiple models in a single server instance. Instead, each model runs as a separate process on its own port.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         Load Balancer / Proxy           │
-│          (Optional - Nginx)             │
-└───────────┬─────────────────────────────┘
-            │
-     ┌──────┴──────┬──────────────┐
-     │             │              │
-┌────▼────┐   ┌────▼────┐   ┌────▼────┐
-│ Model A │   │ Model B │   │ Model C │
-│ Port    │   │ Port    │   │ Port    │
-│ 8000    │   │ 8001    │   │ 8002    │
-│ GPU 0   │   │ GPU 1   │   │ GPU 2   │
-└─────────┘   └─────────┘   └─────────┘
-```
-
-### GPU Assignment Strategies
-
-**Strategy 1: One Model Per GPU**
-```
-# Model A on GPU 0
-CUDA_VISIBLE_DEVICES=0 vllm serve model_a --port 8000
-
-# Model B on GPU 1
-CUDA_VISIBLE_DEVICES=1 vllm serve model_b --port 8001
-
-# Model C on GPU 2
-CUDA_VISIBLE_DEVICES=2 vllm serve model_c --port 8002
-```
-
-**Strategy 2: GPU Sharing (Small Models)**
-```
-# Both models share GPU 0
-CUDA_VISIBLE_DEVICES=0 vllm serve small_model_a --port 8000 --gpu-memory-utilization 0.4
-CUDA_VISIBLE_DEVICES=0 vllm serve small_model_b --port 8001 --gpu-memory-utilization 0.4
-```
-
-**Strategy 3: Tensor Parallelism (Large Model)**
-```
-# Single model using multiple GPUs
-CUDA_VISIBLE_DEVICES=0,1,2,3 vllm serve large_model --port 8000 --tensor-parallel-size 4
-```
-
-### Using the Management Interface
-
-The management interface handles all of this automatically:
-
-```
-# Start manager
-./start_manager.sh
-
-# Start models on different GPUs
-curl -X POST http://localhost:9000/models/opt-125m/start \
-  -d '{"gpu_ids": "0", "port": 8000}'
-
-curl -X POST http://localhost:9000/models/mistral-7b/start \
-  -d '{"gpu_ids": "1", "port": 8001}'
-
-curl -X POST http://localhost:9000/models/llama-7b/start \
-  -d '{"gpu_ids": "2,3", "tensor_parallel_size": 2, "port": 8002}'
-```
-
-### Load Balancing (Optional)
-
-For a unified API endpoint, use Nginx:
-
-```
-upstream vllm_opt {
-    server localhost:8000;
-}
-
-upstream vllm_mistral {
-    server localhost:8001;
-}
-
-server {
-    listen 80;
-    
-    location /opt/ {
-        proxy_pass http://vllm_opt/;
-    }
-    
-    location /mistral/ {
-        proxy_pass http://vllm_mistral/;
-    }
-}
-```
+- ✅ **Database Backend**: All model configurations are stored in a persistent SQLite database.
+- ✅ **UI-Driven Workflow**: Pull, configure, run, and delete models entirely from the browser.
+- ✅ **Live Logging**: Real-time log streaming for model downloads and vLLM upgrades.
+- ✅ **System Management**: View vLLM version and perform one-click upgrades.
+- ✅ **Dynamic Port Allocation**: Automatically assigns available ports to running models.
 
 ## 🔧 Service Management
 
@@ -806,19 +503,18 @@ server {
 
 After testing manually, install as a systemd service for automatic startup:
 
-```
-./manage_service.sh install
+```bash
+sudo ./manage_service.sh install
 ```
 
 This creates a `vllm` service that:
 - Starts automatically on boot
 - Restarts on failure
-- Runs with your user permissions
-- Logs to systemd journal
+- Runs the `run.sh` script to launch the manager.
 
 ### Service Commands
 
-```
+```bash
 # Check status
 systemctl status vllm
 
@@ -828,272 +524,82 @@ sudo systemctl start vllm
 # Stop service
 sudo systemctl stop vllm
 
-# Restart service
-sudo systemctl restart vllm
-
-# Enable auto-start on boot
-sudo systemctl enable vllm
-
-# Disable auto-start
-sudo systemctl disable vllm
-
 # View logs (real-time)
 journalctl -u vllm -f
-
-# View recent logs
-journalctl -u vllm -n 50
 ```
 
 ### Uninstalling Service
 
+```bash
+sudo ./manage_service.sh uninstall
 ```
-./manage_service.sh uninstall
-```
-
-This removes the service but keeps vLLM and your models.
-
-### Installing Manager as a Service
-
-```
-./manage_service.sh install-manager
-```
-
-Creates a separate `vllm-manager` service on port 9000.
 
 ## ⬆️ Upgrading
 
-### Upgrade Script
+vLLM can be upgraded directly from the Web UI.
 
-```
-cd /path/to/install_dir
-./upgrade_vllm.sh
-```
-
-The script:
-- Detects installation mode (stable vs dev)
-- Stops running services
-- Upgrades vLLM
-- Restarts services
-- Verifies installation
-
-### Manual Upgrade (Stable)
-
-```
-source venv/bin/activate
-pip install --upgrade vllm
-```
-
-### Manual Upgrade (Dev)
-
-```
-cd vllm-source
-git pull
-pip install -e . --upgrade
-```
+1.  Navigate to the "System Information" panel in the dashboard.
+2.  Click the "Upgrade vLLM" button.
+3.  A log window will appear, showing the real-time output of the upgrade process.
+4.  Once the upgrade is complete, **restart the manager** (`sudo systemctl restart vllm` if running as a service, or `Ctrl+C` and `./run.sh` otherwise) to apply the changes.
 
 ## 🔧 Troubleshooting
 
 ### Common Issues
 
-#### No Models Configured
+#### Model Fails to Download
 
-**Symptom:** `run.sh` says MODEL_LIST is empty
-
-**Solution:**
-```
-# Download a model
-./pull_model.sh facebook/opt-125m
-
-# Model is automatically added to .env
-./run.sh
-```
-
-#### Model Not Found
-
-**Symptom:** Error about missing model directory
-
-**Solution:**
-```
-# Check what models you have
-ls models/
-
-# Check .env configuration
-cat .env
-
-# Download the missing model
-./pull_model.sh <model_name>
-```
+- **Gated Model**: Ensure you have run `huggingface-cli login` on the server.
+- **Disk Space**: Check if you have enough disk space in the `models` directory.
+- **Network Issues**: Verify the server has a stable internet connection.
 
 #### vLLM Not Found
 
-**Symptom:** `vllm: command not found`
-
+**Symptom:** `vllm: command not found` when running scripts manually.
 **Solution:**
-```
+```bash
 # Activate virtual environment
 source venv/bin/activate
-
-# Verify installation
-vllm --version
-
-# If not installed, reinstall
-pip install vllm
 ```
 
 #### Out of Memory (OOM)
 
-**Symptom:** CUDA out of memory errors
-
-**Solutions:**
-```
-# 1. Use a smaller model
-./pull_model.sh facebook/opt-125m
-
-# 2. Reduce GPU memory utilization
-# Edit models/your-model/vllm_config.json
-{
-  "gpu_memory_utilization": 0.7,  # Lower this
-  "max_model_len": 1024           # Or reduce this
-}
-
-# 3. Use quantized model
-./pull_model.sh TheBloke/Llama-2-7B-Chat-GPTQ
-```
-
-#### Service Won't Start
-
-**Check logs:**
-```
-journalctl -u vllm -n 50
-```
-
-**Common causes:**
-- Model not downloaded
-- Incorrect permissions
-- Port already in use
-- GPU not available
-
-#### Port Already in Use
-
-**Find what's using the port:**
-```
-sudo lsof -i :8000
-```
-
-**Kill the process:**
-```
-kill <PID>
-```
-
-**Or change port in .env:**
-```
-VLLM_PORT=8001
-```
-
-#### WSL-Specific Issues
-
-**GPU not detected:**
-```
-# Check Windows driver
-# From PowerShell:
-nvidia-smi
-
-# Update WSL
-wsl --update
-```
-
-**Slow performance:**
-```
-# Verify files are in Linux filesystem
-pwd  # Should show /home/... not /mnt/c/...
-
-# Check WSL version
-wsl -l -v  # Should show VERSION 2
-```
-
-### Getting Help
-
-1. Check `QUICKSTART.txt` in your installation directory
-2. Review this README
-3. Check vLLM documentation: https://docs.vllm.ai
-4. Open an issue: https://github.com/ParisNeo/vllm_deployer/issues
+**Symptom:** CUDA out of memory errors when starting a model.
+**Solution:**
+- Use a smaller model.
+- In the UI, edit the model's configuration to lower the "GPU Memory Utilization" (e.g., to `0.7`).
+- Use a quantized model (e.g., GPTQ, AWQ).
 
 ## 📁 Project Structure
 
 ```
 vllm_deployer/
-├── install_vllm.sh         # Main installation script
-├── upgrade_vllm.sh         # Upgrade script
-├── manage_service.sh       # Service management
-├── run.sh                  # Simple server launcher
-├── pull_model.sh           # Model download utility
-├── vllm_manager.py         # FastAPI management interface
-├── start_manager.sh        # Manager launcher
-├── .gitignore             # Git ignore rules
-├── CHANGELOG.md           # Version history
-├── LICENSE                # MIT License
-└── README.md              # This file
+├── frontend/                # Web UI files
+│   ├── index.html
+│   └── script.js
+├── install_vllm.sh          # Main installation script
+├── manage_service.sh        # Service management
+├── run.sh                   # Manager launcher
+├── reset_password.sh        # Password reset utility
+├── vllm_manager.py          # FastAPI backend
+├── .gitignore
+├── CHANGELOG.md
+└── README.md
 
 # After installation:
 install_dir/
-├── venv/                  # Python virtual environment
-├── models/                # Downloaded models
-├── vllm-source/          # Source code (dev mode only)
-├── .env                   # Configuration file
-├── .install_info         # Installation metadata
-├── QUICKSTART.txt        # Quick reference guide
-├── run.sh                # Copied scripts
-├── pull_model.sh
-├── manage_service.sh
-├── upgrade_vllm.sh
-├── vllm_manager.py
-└── start_manager.sh
+├── frontend/
+├── venv/
+├── models/
+├── .env
+├── vllm_manager.db          # SQLite database
+├── ... (copied scripts)
 ```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow existing code style
-- Add tests for new features
-- Update documentation
-- Update CHANGELOG.md
+Contributions are welcome! Please fork the repository, create a feature branch, and open a Pull Request.
 
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🔗 Links
-
-- **Project Repository**: https://github.com/ParisNeo/vllm_deployer
-- **vLLM Documentation**: https://docs.vllm.ai
-- **vLLM GitHub**: https://github.com/vllm-project/vllm
-- **Hugging Face Models**: https://huggingface.co/models
-- **WSL Documentation**: https://docs.microsoft.com/windows/wsl/
-
-## 🙏 Acknowledgments
-
-- **vLLM Team** for the excellent inference engine
-- **Hugging Face** for model hosting and tools
-- **Community Contributors** for feedback and improvements
-
-## 📊 Stats
-
-- ⭐ Star this repo if you find it useful!
-- 🐛 Report bugs via GitHub Issues
-- 💡 Request features via GitHub Discussions
-- 📧 Contact: [Your contact info or link]
-
----
-
-**Made with ❤️ by ParisNeo**
-
-*Happy Serving! 🚀*

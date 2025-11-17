@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 vLLM Manager Pro - Advanced Web UI for vLLM Instance Management
-Features: DB Backend, UI-based model pulling, Authentication, GPU Management
+Features: DB Backend, UI-based model pulling, UI-based upgrades, Authentication, GPU Management
 """
 
 import asyncio
@@ -12,15 +12,15 @@ import signal
 import hashlib
 import secrets
 import shutil
+import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from threading import Thread
 import queue
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request, WebSocket, WebSocketDisconnect
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -29,9 +29,7 @@ import psutil
 import GPUtil
 from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, Float
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.exc import SQLAlchemyError
-from huggingface_hub import snapshot_download, HfApi
-from huggingface_hub.utils import HfFolder
+from huggingface_hub import snapshot_download, HfFolder
 
 # ============================================
 # Configuration
@@ -45,10 +43,8 @@ DATABASE_URL = "sqlite:///vllm_manager.db"
 SESSION_FILE = Path(".manager_sessions.json")
 SESSION_TIMEOUT = 3600  # 1 hour
 
-# Ensure model dir exists
 MODEL_DIR.mkdir(exist_ok=True)
 
-# Generate default password hash if not set
 if not ADMIN_PASSWORD_HASH:
     default_password = "admin123"
     ADMIN_PASSWORD_HASH = hashlib.sha256(default_password.encode()).hexdigest()
@@ -75,16 +71,11 @@ class Model(Base):
     path = Column(String)
     model_type = Column(String, default=ModelType.TEXT)
     config = Column(JSON, default=lambda: {
-        "gpu_memory_utilization": 0.9,
-        "tensor_parallel_size": 1,
-        "max_model_len": 4096,
-        "dtype": "auto",
-        "quantization": None,
-        "trust_remote_code": False,
+        "gpu_memory_utilization": 0.9, "tensor_parallel_size": 1, "max_model_len": 4096,
+        "dtype": "auto", "quantization": None, "trust_remote_code": False,
         "enable_prefix_caching": False,
     })
     download_status = Column(String, default="not_downloaded")
-    download_log = Column(Text, default="")
     size_gb = Column(Float, default=0.0)
 
 Base.metadata.create_all(bind=engine)
@@ -101,13 +92,13 @@ def get_db():
 # ============================================
 
 class ModelConfigUpdate(BaseModel):
-    gpu_memory_utilization: float = Field(default=0.9, ge=0.1, le=1.0)
-    tensor_parallel_size: int = Field(default=1, ge=1)
-    max_model_len: int = Field(default=4096, ge=128)
-    dtype: str = "auto"
-    quantization: Optional[str] = None
-    trust_remote_code: bool = False
-    enable_prefix_caching: bool = False
+    gpu_memory_utilization: float
+    tensor_parallel_size: int
+    max_model_len: int
+    dtype: str
+    quantization: Optional[str]
+    trust_remote_code: bool
+    enable_prefix_caching: bool
 
 class ModelStatus(BaseModel):
     id: int
@@ -122,30 +113,15 @@ class ModelStatus(BaseModel):
     port: Optional[int] = None
     pid: Optional[int] = None
     gpu_ids: Optional[str] = None
-    uptime: Optional[str] = None
-    memory_usage_mb: Optional[float] = None
-    cpu_percent: Optional[float] = None
 
 class GPUInfo(BaseModel):
     id: int
     name: str
     memory_total_mb: int
     memory_used_mb: int
-    memory_free_mb: int
     utilization_percent: float
-    temperature: Optional[float] = None
-    assigned_models: List[str] = []
-
-class DashboardStats(BaseModel):
-    total_models: int
-    running_models: int
-    stopped_models: int
-    total_gpus: int
-    total_memory_mb: int
-    used_memory_mb: int
-    system_cpu_percent: float
-    system_memory_percent: float
-    uptime: str
+    temperature: Optional[float]
+    assigned_models: List[str]
 
 class LoginRequest(BaseModel):
     username: str
@@ -153,67 +129,56 @@ class LoginRequest(BaseModel):
 
 class PullModelRequest(BaseModel):
     hf_model_id: str
+    
+class SystemInfo(BaseModel):
+    vllm_version: str
+    dev_mode: bool
 
 # ============================================
-# Application Setup
+# App Setup
 # ============================================
 
-app = FastAPI(
-    title="vLLM Manager Pro",
-    description="Advanced Web UI for vLLM Model Management",
-    version="3.0.0"
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="vLLM Manager Pro", version="3.1.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 # Global state
-running_models: Dict[int, dict] = {} # model_id -> process info
+running_models: Dict[int, dict] = {}
 sessions: Dict[str, dict] = {}
-download_tasks: Dict[int, dict] = {} # model_id -> {thread, log_queue}
+download_tasks: Dict[int, dict] = {}
+upgrade_task: Dict = {}
 start_time = datetime.now()
 
 # ============================================
 # Authentication
 # ============================================
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str) -> str: return hashlib.sha256(password.encode()).hexdigest()
+
+def save_sessions():
+    with open(SESSION_FILE, 'w') as f: json.dump(sessions, f, indent=2)
+
+def load_sessions():
+    global sessions
+    if SESSION_FILE.exists():
+        with open(SESSION_FILE, 'r') as f: sessions = json.load(f)
 
 def create_session(username: str) -> str:
     token = secrets.token_urlsafe(32)
     sessions[token] = {
-        "username": username,
-        "created": datetime.now().isoformat(),
+        "username": username, "created": datetime.now().isoformat(),
         "expires": (datetime.now() + timedelta(seconds=SESSION_TIMEOUT)).isoformat()
     }
     save_sessions()
     return token
 
 def verify_session(token: Optional[str]) -> bool:
-    if not token or token not in sessions:
-        return False
+    if not token or token not in sessions: return False
     session = sessions[token]
     if datetime.now() > datetime.fromisoformat(session["expires"]):
         del sessions[token]
         save_sessions()
         return False
     return True
-
-def save_sessions():
-    with open(SESSION_FILE, 'w') as f:
-        json.dump(sessions, f, indent=2)
-
-def load_sessions():
-    global sessions
-    if SESSION_FILE.exists():
-        with open(SESSION_FILE, 'r') as f:
-            sessions = json.load(f)
 
 async def get_current_user(request: Request):
     token = request.cookies.get("session_token")
@@ -222,166 +187,111 @@ async def get_current_user(request: Request):
     return sessions[token]["username"]
 
 # ============================================
-# Model Downloading
+# Background Tasks (Download & Upgrade)
 # ============================================
-
-class LogQueueHandler:
-    def __init__(self, q):
-        self.q = q
-    def write(self, text):
-        self.q.put(text)
-    def flush(self):
-        pass
 
 def download_model_task(db_id: int, hf_model_id: str, model_name: str):
     log_q = queue.Queue()
     download_tasks[db_id]['log_queue'] = log_q
-
-    def log(message):
-        log_q.put(f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
-
+    def log(message): log_q.put(f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
     try:
         db = SessionLocal()
         model = db.query(Model).filter(Model.id == db_id).first()
         if not model:
-            log(f"ERROR: Model with ID {db_id} not found in DB.")
-            return
-
-        log(f"Starting download for {hf_model_id}...")
-        model.download_status = "downloading"
-        db.commit()
-
+            log(f"ERROR: Model with ID {db_id} not found in DB."); return
+        log(f"Starting download for {hf_model_id}..."); model.download_status = "downloading"; db.commit()
         model_path = MODEL_DIR / model_name
-        
-        token = HfFolder.get_token()
-        snapshot_download(
-            repo_id=hf_model_id,
-            local_dir=model_path,
-            local_dir_use_symlinks=False,
-            token=token
-        )
-
+        snapshot_download(repo_id=hf_model_id, local_dir=model_path, local_dir_use_symlinks=False, token=HfFolder.get_token())
         log("Download complete. Calculating size...")
         total_size = sum(f.stat().st_size for f in model_path.glob('**/*') if f.is_file())
-        size_gb = total_size / (1024**3)
-
-        model.download_status = "completed"
-        model.path = str(model_path)
-        model.size_gb = size_gb
-        
-        # Detect model type
+        model.download_status = "completed"; model.path = str(model_path); model.size_gb = total_size / (1024**3)
         config_path = model_path / "config.json"
         if config_path.exists():
             with open(config_path) as f:
-                config = json.load(f)
-                if any(key in config for key in ['pooling', 'sentence_transformers', 'embedding']):
-                    model.model_type = ModelType.EMBEDDING
-                    log("Detected embedding model type.")
-
-        db.commit()
-        log("Model setup complete and saved to database.")
-
+                if any(k in json.load(f) for k in ['pooling', 'sentence_transformers', 'embedding']):
+                    model.model_type = ModelType.EMBEDDING; log("Detected embedding model type.")
+        db.commit(); log("Model setup complete.")
     except Exception as e:
         log(f"ERROR: {str(e)}")
         if 'db' in locals() and db.is_active:
             model = db.query(Model).filter(Model.id == db_id).first()
-            if model:
-                model.download_status = "error"
-                model.download_log = model.download_log + f"\nERROR: {str(e)}"
-                db.commit()
+            if model: model.download_status = "error"; db.commit()
     finally:
-        log_q.put(None) # Sentinel to indicate completion
-        if 'db' in locals() and db.is_active:
-            db.close()
+        log_q.put(None)
+        if 'db' in locals() and db.is_active: db.close()
 
-
-# ============================================
-# Utility Functions
-# ============================================
-
-def get_gpu_info() -> List[GPUInfo]:
-    gpus = []
+def upgrade_vllm_task():
+    log_q = queue.Queue(); upgrade_task['log_queue'] = log_q
+    def log(message): log_q.put(f"[{datetime.now().strftime('%H:%M:%S')}] {message}\n")
     try:
-        gpu_list = GPUtil.getGPUs()
-        for gpu in gpu_list:
-            assigned = [m['name'] for m in running_models.values() if str(gpu.id) in m.get("gpu_ids", "0").split(",")]
-            gpus.append(GPUInfo(
-                id=gpu.id, name=gpu.name, memory_total_mb=int(gpu.memoryTotal),
-                memory_used_mb=int(gpu.memoryUsed), memory_free_mb=int(gpu.memoryFree),
-                utilization_percent=float(gpu.load * 100), temperature=float(gpu.temperature) if gpu.temperature else None,
-                assigned_models=assigned
-            ))
+        log("Starting vLLM upgrade..."); venv_python = sys.executable; install_dir = Path(__file__).parent.resolve()
+        dev_mode, _ = get_system_info_sync()
+        if dev_mode:
+            log("Dev mode: upgrading from git..."); vllm_source_dir = install_dir / "vllm-source"
+            if not vllm_source_dir.exists(): raise FileNotFoundError("vllm-source directory not found")
+            log("Running 'git pull'..."); git_proc = subprocess.run(["git", "pull"], cwd=vllm_source_dir, capture_output=True, text=True)
+            log(git_proc.stdout);
+            if git_proc.returncode != 0: log(f"ERROR:\n{git_proc.stderr}"); raise subprocess.CalledProcessError(git_proc.returncode, git_proc.args, stderr=git_proc.stderr)
+            command = [venv_python, "-m", "pip", "install", "-e", "."]; cwd = vllm_source_dir
+        else:
+            log("Stable mode: upgrading from PyPI..."); command = [venv_python, "-m", "pip", "install", "--upgrade", "vllm"]; cwd = install_dir
+        log(f"Executing: {' '.join(str(c) for c in command)}")
+        process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        for line in iter(process.stdout.readline, ''): log(line.strip())
+        process.wait()
+        if process.returncode != 0: raise subprocess.CalledProcessError(process.returncode, command)
+        log("\n✅ Upgrade complete! Please RESTART the manager to apply changes.")
     except Exception as e:
-        print(f"Error getting GPU info: {e}")
-    return gpus
+        log(f"\n❌ ERROR: {str(e)}")
+    finally:
+        log_q.put(None); upgrade_task.clear()
 
-def get_process_info(pid: int) -> dict:
-    try:
-        proc = psutil.Process(pid)
-        with proc.oneshot():
-            return {"memory_mb": proc.memory_info().rss / 1024**2, "cpu_percent": proc.cpu_percent(interval=0.1)}
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
-        return {}
+# ============================================
+# Utilities
+# ============================================
 
-async def check_model_health(port: int) -> bool:
-    try:
-        async with httpx.AsyncClient() as client:
-            res = await client.get(f"http://localhost:{port}/health", timeout=2.0)
-            return res.status_code == 200
-    except:
-        return False
+def get_system_info_sync():
+    install_info_path = Path(__file__).parent.resolve() / ".install_info"
+    dev_mode = False; vllm_version = "Unknown"
+    if install_info_path.exists():
+        with open(install_info_path, 'r') as f:
+            for line in f:
+                if "DEV_MODE=true" in line: dev_mode = True
+                if line.startswith("VLLM_VERSION="): vllm_version = line.strip().split("=")[1]
+    return dev_mode, vllm_version
 
 def find_available_port(start_port: int = 8000) -> int:
     used_ports = {info["port"] for info in running_models.values()}
     port = start_port
-    while port in used_ports:
-        port += 1
+    while port in used_ports: port += 1
     return port
-
-# ============================================
-# Startup/Shutdown
-# ============================================
-
-@app.on_event("startup")
-async def startup_event():
-    load_sessions()
-    print(f"✓ vLLM Manager Pro started on port {MANAGER_PORT}")
-    print(f"✓ WebUI: http://localhost:{MANAGER_PORT}")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    save_sessions()
 
 # ============================================
 # API Endpoints
 # ============================================
 
+@app.on_event("startup")
+async def startup_event(): load_sessions()
+
 @app.post("/api/login")
-async def login(credentials: LoginRequest):
-    if credentials.username != ADMIN_USERNAME or hash_password(credentials.password) != ADMIN_PASSWORD_HASH:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    token = create_session(credentials.username)
-    response = JSONResponse(content={"success": True, "username": credentials.username})
-    response.set_cookie(key="session_token", value=token, httponly=True, max_age=SESSION_TIMEOUT, samesite="lax")
-    return response
+async def login(req: LoginRequest):
+    if req.username != ADMIN_USERNAME or hash_password(req.password) != ADMIN_PASSWORD_HASH:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_session(req.username)
+    res = FileResponse("frontend/index.html"); res.set_cookie(key="session_token", value=token, httponly=True, max_age=SESSION_TIMEOUT, samesite="lax")
+    return res
 
 @app.post("/api/logout")
 async def logout(request: Request):
     token = request.cookies.get("session_token")
-    if token in sessions:
-        del sessions[token]
-        save_sessions()
-    response = JSONResponse(content={"success": True})
-    response.delete_cookie("session_token")
-    return response
+    if token in sessions: del sessions[token]; save_sessions()
+    res = FileResponse("frontend/index.html"); res.delete_cookie("session_token")
+    return res
 
 @app.get("/api/check-auth")
 async def check_auth(request: Request):
-    token = request.cookies.get("session_token")
-    is_auth = verify_session(token)
+    token = request.cookies.get("session_token"); is_auth = verify_session(token)
     return {"authenticated": is_auth, "username": sessions[token]["username"] if is_auth else None}
-
-# --- Model Management ---
 
 @app.get("/api/models", response_model=List[ModelStatus])
 async def list_models(db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
@@ -389,347 +299,108 @@ async def list_models(db: SessionLocal = Depends(get_db), username: str = Depend
     statuses = []
     for m in db_models:
         is_running = m.id in running_models
-        status = ModelStatus(
-            id=m.id, name=m.name, hf_model_id=m.hf_model_id, model_type=m.model_type,
-            config=m.config, download_status=m.download_status, size_gb=m.size_gb,
-            is_running=is_running
-        )
+        status = ModelStatus(id=m.id, name=m.name, hf_model_id=m.hf_model_id, model_type=m.model_type,
+                             config=m.config, download_status=m.download_status, size_gb=m.size_gb, is_running=is_running)
         if is_running:
             info = running_models[m.id]
-            status.status_text = "running"
-            status.port, status.pid, status.gpu_ids = info["port"], info["pid"], info["gpu_ids"]
-            proc_info = get_process_info(info['pid'])
-            status.memory_usage_mb = proc_info.get("memory_mb")
-            status.cpu_percent = proc_info.get("cpu_percent")
+            status.status_text = "running"; status.port, status.pid, status.gpu_ids = info["port"], info["pid"], info["gpu_ids"]
         statuses.append(status)
     return statuses
 
 @app.post("/api/models/pull")
 async def pull_model(req: PullModelRequest, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
-    hf_model_id = req.hf_model_id
-    model_name = hf_model_id.split('/')[-1]
+    model_name = req.hf_model_id.split('/')[-1]
+    if db.query(Model).filter(Model.name == model_name).first(): raise HTTPException(400, "Model already exists.")
+    new_model = Model(name=model_name, hf_model_id=req.hf_model_id); db.add(new_model); db.commit(); db.refresh(new_model)
+    thread = Thread(target=download_model_task, args=(new_model.id, req.hf_model_id, model_name))
+    download_tasks[new_model.id] = {'thread': thread}; thread.start()
+    return {"success": True, "model_id": new_model.id}
 
-    if db.query(Model).filter(Model.name == model_name).first():
-        raise HTTPException(status_code=400, detail="Model already exists.")
-
-    new_model = Model(name=model_name, hf_model_id=hf_model_id)
-    db.add(new_model)
-    db.commit()
-    db.refresh(new_model)
-
-    thread = Thread(target=download_model_task, args=(new_model.id, hf_model_id, model_name))
-    download_tasks[new_model.id] = {'thread': thread}
-    thread.start()
-
-    return {"success": True, "message": "Download started.", "model_id": new_model.id}
-
-@app.websocket("/ws/pull/{model_id}")
+@websocket_endpoint("/ws/pull/{model_id}")
 async def pull_model_ws(websocket: WebSocket, model_id: int):
     await websocket.accept()
-    if model_id not in download_tasks:
-        await websocket.send_text("ERROR: Task not found.")
-        await websocket.close()
-        return
-
+    if model_id not in download_tasks or 'log_queue' not in download_tasks[model_id]:
+        await websocket.close(); return
     log_q = download_tasks[model_id].get('log_queue')
-    if not log_q:
-        await websocket.send_text("ERROR: Log queue not ready.")
-        await websocket.close()
-        return
-
     try:
         while True:
             log_line = log_q.get()
-            if log_line is None: # Sentinel
-                break
+            if log_line is None: break
             await websocket.send_text(log_line)
         await websocket.send_text("---DOWNLOAD-COMPLETE---")
-    except WebSocketDisconnect:
-        pass
     finally:
-        if model_id in download_tasks:
-            del download_tasks[model_id]
-
-@app.put("/api/models/{model_id}/config")
-async def update_model_config(model_id: int, config: ModelConfigUpdate, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
-    model = db.query(Model).filter(Model.id == model_id).first()
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-    model.config = config.dict()
-    db.commit()
-    return {"success": True, "message": "Configuration updated."}
+        if model_id in download_tasks: del download_tasks[model_id]
 
 @app.delete("/api/models/{model_id}")
 async def delete_model(model_id: int, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
-    if model_id in running_models:
-        raise HTTPException(status_code=400, detail="Cannot delete a running model.")
-    
+    if model_id in running_models: raise HTTPException(400, "Cannot delete a running model.")
     model = db.query(Model).filter(Model.id == model_id).first()
-    if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-
-    if model.path and Path(model.path).exists():
-        shutil.rmtree(model.path)
-    
-    db.delete(model)
-    db.commit()
-    return {"success": True, "message": "Model deleted."}
+    if not model: raise HTTPException(404, "Model not found")
+    if model.path and Path(model.path).exists(): shutil.rmtree(model.path)
+    db.delete(model); db.commit()
+    return {"success": True}
 
 @app.post("/api/models/{model_id}/start")
 async def start_model(model_id: int, gpu_ids: str = "0", db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
-    if model_id in running_models:
-        raise HTTPException(status_code=400, detail="Model is already running")
-    
+    if model_id in running_models: raise HTTPException(400, "Model is already running")
     model = db.query(Model).filter(Model.id == model_id).first()
-    if not model or model.download_status != "completed":
-        raise HTTPException(status_code=404, detail="Model not found or not downloaded")
-
-    config = model.config
-    port = find_available_port()
-    
-    cmd = [
-        "python", "-m", "vllm.entrypoints.openai.api_server",
-        "--model", str(model.path),
-        "--port", str(port),
-        "--host", "0.0.0.0",
-        "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
-        "--tensor-parallel-size", str(config['tensor_parallel_size']),
-        "--max-model-len", str(config['max_model_len']),
-        "--dtype", config['dtype'],
-    ]
-    if config.get('quantization'):
-        cmd.extend(["--quantization", config['quantization']])
-    if config.get('trust_remote_code'):
-        cmd.append("--trust-remote-code")
-    if config.get('enable_prefix_caching'):
-        cmd.append("--enable-prefix-caching")
-
-    env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = gpu_ids
-    
+    if not model or model.download_status != "completed": raise HTTPException(404, "Model not downloaded")
+    config = model.config; port = find_available_port()
+    cmd = [ "python", "-m", "vllm.entrypoints.openai.api_server", "--model", str(model.path), "--port", str(port),
+            "--host", "0.0.0.0", "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
+            "--tensor-parallel-size", str(config['tensor_parallel_size']), "--max-model-len", str(config['max_model_len']),
+            "--dtype", config['dtype']]
+    if config.get('quantization'): cmd.extend(["--quantization", config['quantization']])
+    if config.get('trust_remote_code'): cmd.append("--trust-remote-code")
+    env = os.environ.copy(); env["CUDA_VISIBLE_DEVICES"] = gpu_ids
     process = subprocess.Popen(cmd, env=env, preexec_fn=os.setsid)
-    await asyncio.sleep(5) # Give it time to start
-
-    if process.poll() is not None:
-        raise HTTPException(status_code=500, detail="Failed to start model process")
-
-    running_models[model.id] = {
-        "process": process, "pid": process.pid, "port": port, "gpu_ids": gpu_ids, 
-        "name": model.name, "start_time": datetime.now().isoformat()
-    }
-    return {"success": True, "message": "Model started"}
+    await asyncio.sleep(5)
+    if process.poll() is not None: raise HTTPException(500, "Failed to start model")
+    running_models[model.id] = {"process": process, "pid": process.pid, "port": port, "gpu_ids": gpu_ids, "name": model.name}
+    return {"success": True}
 
 @app.post("/api/models/{model_id}/stop")
 async def stop_model(model_id: int, username: str = Depends(get_current_user)):
-    if model_id not in running_models:
-        raise HTTPException(status_code=404, detail="Model is not running")
-    
-    info = running_models[model_id]
-    os.killpg(os.getpgid(info["pid"]), signal.SIGTERM)
-    
-    del running_models[model_id]
-    return {"success": True, "message": "Model stopped"}
+    if model_id not in running_models: raise HTTPException(404, "Model is not running")
+    info = running_models[model_id]; os.killpg(os.getpgid(info["pid"]), signal.SIGTERM); del running_models[model_id]
+    return {"success": True}
 
-# --- Dashboard & GPU ---
+@app.get("/api/system/info", response_model=SystemInfo)
+async def get_system_info(username: str = Depends(get_current_user)):
+    dev_mode, vllm_version = get_system_info_sync()
+    return SystemInfo(dev_mode=dev_mode, vllm_version=vllm_version)
 
-@app.get("/api/gpus", response_model=List[GPUInfo])
-async def list_gpus(username: str = Depends(get_current_user)):
-    return get_gpu_info()
+@app.post("/api/system/upgrade")
+async def upgrade_vllm(username: str = Depends(get_current_user)):
+    if upgrade_task: raise HTTPException(400, "Upgrade already in progress.")
+    thread = Thread(target=upgrade_vllm_task); upgrade_task['thread'] = thread; thread.start()
+    return {"success": True}
 
-@app.get("/api/dashboard/stats", response_model=DashboardStats)
-async def get_dashboard_stats(db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
-    total_models = db.query(Model).count()
-    gpus = get_gpu_info()
-    uptime = str(datetime.now() - start_time).split('.')[0]
-    
-    return DashboardStats(
-        total_models=total_models, running_models=len(running_models),
-        stopped_models=total_models - len(running_models),
-        total_gpus=len(gpus),
-        total_memory_mb=sum(g.memory_total_mb for g in gpus),
-        used_memory_mb=sum(g.memory_used_mb for g in gpus),
-        system_cpu_percent=psutil.cpu_percent(interval=0.1),
-        system_memory_percent=psutil.virtual_memory().percent, uptime=uptime
-    )
+@app.websocket("/ws/upgrade")
+async def upgrade_vllm_ws(websocket: WebSocket):
+    await websocket.accept()
+    if not upgrade_task or 'log_queue' not in upgrade_task: await websocket.close(); return
+    log_q = upgrade_task['log_queue']
+    try:
+        while True:
+            log_line = log_q.get()
+            if log_line is None: break
+            await websocket.send_text(log_line)
+        await websocket.send_text("---UPGRADE-COMPLETE---")
+    except WebSocketDisconnect: pass
 
 # ============================================
-# Web UI
+# Frontend Serving
 # ============================================
 
-@app.get("/", response_class=HTMLResponse)
-async def root():
-    # Return login page or dashboard
-    return HTML_TEMPLATE
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
-# Simple embedded HTML for single-file deployment
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>vLLM Manager Pro</title>
-    <!-- Simple styling -->
-    <style>
-        body { font-family: sans-serif; background-color: #f0f2f5; color: #333; }
-        .container { max-width: 1200px; margin: auto; padding: 20px; }
-        .hidden { display: none; }
-        /* Add more styles for login, dashboard, modals etc. */
-    </style>
-</head>
-<body>
-    <div id="app">
-        <!-- Login View -->
-        <div id="login-view">
-            <h2>Login</h2>
-            <input id="username" placeholder="Username">
-            <input id="password" type="password" placeholder="Password">
-            <button onclick="login()">Login</button>
-        </div>
-
-        <!-- Dashboard View -->
-        <div id="dashboard-view" class="hidden">
-            <h1>vLLM Manager</h1>
-            <button onclick="logout()">Logout</button>
-            
-            <!-- Pull Model -->
-            <div>
-                <h3>Pull New Model</h3>
-                <input id="hf-model-id" placeholder="HuggingFace Model ID (e.g., facebook/opt-125m)">
-                <button onclick="pullModel()">Pull Model</button>
-            </div>
-
-            <!-- Model List -->
-            <h3>Managed Models</h3>
-            <div id="model-list"></div>
-        </div>
-        
-        <!-- Pull Log Modal -->
-        <div id="pull-log-modal" class="hidden">
-            <h3>Downloading Model...</h3>
-            <pre id="pull-log"></pre>
-        </div>
-    </div>
-
-<script>
-    const api = {
-        async get(endpoint) { return fetch(endpoint).then(res => res.json()); },
-        async post(endpoint, body) {
-            return fetch(endpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            }).then(res => res.json());
-        },
-        async put(endpoint, body) { /* ... */ },
-        async del(endpoint) { /* ... */ }
-    };
-
-    function showView(viewId) {
-        document.getElementById('login-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.add('hidden');
-        document.getElementById(viewId).classList.remove('hidden');
-    }
-
-    async function login() {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const res = await api.post('/api/login', { username, password });
-        if (res.success) {
-            showView('dashboard-view');
-            loadDashboard();
-        } else {
-            alert('Login failed');
-        }
-    }
-
-    async function logout() {
-        await api.post('/api/logout', {});
-        showView('login-view');
-    }
-
-    async function pullModel() {
-        const hf_model_id = document.getElementById('hf-model-id').value;
-        const res = await api.post('/api/models/pull', { hf_model_id });
-        if (res.success) {
-            listenForPullLogs(res.model_id);
-            loadDashboard();
-        } else {
-            alert('Error: ' + res.detail);
-        }
-    }
-    
-    function listenForPullLogs(modelId) {
-        document.getElementById('pull-log-modal').classList.remove('hidden');
-        const logEl = document.getElementById('pull-log');
-        logEl.textContent = '';
-        
-        const ws = new WebSocket(`ws://${window.location.host}/ws/pull/${modelId}`);
-        ws.onmessage = (event) => {
-            if (event.data === '---DOWNLOAD-COMPLETE---') {
-                ws.close();
-                document.getElementById('pull-log-modal').classList.add('hidden');
-                loadDashboard();
-            } else {
-                logEl.textContent += event.data;
-            }
-        };
-        ws.onclose = () => {
-             setTimeout(() => {
-                document.getElementById('pull-log-modal').classList.add('hidden');
-                loadDashboard();
-             }, 2000);
-        };
-    }
-
-    async function loadDashboard() {
-        const models = await api.get('/api/models');
-        const listEl = document.getElementById('model-list');
-        listEl.innerHTML = models.map(m => `
-            <div>
-                <strong>${m.name}</strong> (${m.hf_model_id}) - Status: ${m.download_status}
-                ${m.is_running ? `(Running on port ${m.port})` : ''}
-                
-                ${m.download_status === 'completed' && !m.is_running ? `<button onclick="startModel(${m.id})">Start</button>` : ''}
-                ${m.is_running ? `<button onclick="stopModel(${m.id})">Stop</button>` : ''}
-                <button onclick="deleteModel(${m.id})">Delete</button>
-            </div>
-        `).join('');
-    }
-
-    async function startModel(id) {
-        await api.post(`/api/models/${id}/start`);
-        loadDashboard();
-    }
-    async function stopModel(id) {
-        await api.post(`/api/models/${id}/stop`);
-        loadDashboard();
-    }
-    async function deleteModel(id) {
-        if(confirm('Are you sure you want to delete this model and its files?')) {
-            await fetch(`/api/models/${id}`, {method: 'DELETE'});
-            loadDashboard();
-        }
-    }
-
-    // Initial check
-    api.get('/api/check-auth').then(res => {
-        if (res.authenticated) {
-            showView('dashboard-view');
-            loadDashboard();
-        } else {
-            showView('login-view');
-        }
-    });
-
-</script>
-</body>
-</html>
-"""
-
-# ============================================
-# Main Execution
-# ============================================
+@app.get("/")
+async def read_index(request: Request):
+    token = request.cookies.get("session_token")
+    if verify_session(token):
+        return FileResponse('frontend/index.html')
+    return FileResponse('frontend/index.html') # Let JS handle login redirect
 
 if __name__ == "__main__":
     import uvicorn

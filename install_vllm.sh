@@ -291,8 +291,8 @@ echo ""
 SCRIPTS_TO_COPY=(
     "run.sh"
     "manage_service.sh"
-    "upgrade_vllm.sh"
     "vllm_manager.py"
+    "reset_password.sh"
 )
 
 print_info "Copying deployment scripts..."
@@ -308,8 +308,16 @@ for script in "${SCRIPTS_TO_COPY[@]}"; do
     fi
 done
 
+# Copy frontend directory
+if [ -d "$SCRIPT_DIR/frontend" ]; then
+    cp -r "$SCRIPT_DIR/frontend" "$INSTALL_DIR/"
+    print_success "  ✓ frontend/"
+else
+    print_warning "  ⚠ frontend/ directory not found"
+fi
+
 echo ""
-print_success "Copied $COPIED_COUNT script(s) to $INSTALL_DIR"
+print_success "Copied application files to $INSTALL_DIR"
 echo ""
 
 # Create .env configuration file
@@ -368,12 +376,17 @@ GETTING STARTED
      - Username: admin
      - Password: admin123
 
-3. Download and Run a Model
-   ────────────────
+3. Change Default Password
+   ───────────────────────
+   For security, change the admin password immediately:
+   ./reset_password.sh
+
+4. Download and Run a Model
+   ────────────────────────
    - Use the UI to pull a model (e.g., facebook/opt-125m).
    - Once downloaded, click "Start" next to the model.
 
-4. Test Your Model
+5. Test Your Model
    ───────────────
    Once a model is running (e.g., on port 8000), you can test it:
    
@@ -389,7 +402,7 @@ AVAILABLE COMMANDS
 ./run.sh                          - Start the vLLM Manager Web UI
 ./manage_service.sh install       - Install as systemd service
 ./manage_service.sh uninstall     - Remove systemd service
-./upgrade_vllm.sh                 - Upgrade vLLM to latest version
+./reset_password.sh               - Change the admin password for the Web UI
 
 MANAGEMENT UI
 ─────────────
@@ -401,6 +414,7 @@ From the UI, you can:
   • Start, stop, and restart models
   • Monitor GPU usage
   • Configure model parameters
+  • Upgrade vLLM to the latest version
   • Delete models
 
 RECOMMENDED MODELS FOR TESTING
@@ -463,13 +477,16 @@ echo ""
 echo -e "${GREEN}1.${NC} Navigate to installation directory:"
 echo -e "   ${BLUE}cd $INSTALL_DIR${NC}"
 echo ""
-echo -e "${GREEN}2.${NC} Start the vLLM manager:"
+echo -e "${GREEN}2.${NC} (Recommended) Change the default admin password:"
+echo -e "   ${BLUE}./reset_password.sh${NC}"
+echo ""
+echo -e "${GREEN}3.${NC} Start the vLLM manager:"
 echo -e "   ${BLUE}./run.sh${NC}"
 echo ""
-echo -e "${GREEN}3.${NC} Open the Web UI in your browser at ${BLUE}http://localhost:9000${NC}"
-echo "   Login with 'admin' / 'admin123' and pull your first model."
+echo -e "${GREEN}4.${NC} Open the Web UI in your browser at ${BLUE}http://localhost:9000${NC}"
+echo "   Login and pull your first model."
 echo ""
-echo -e "${GREEN}4.${NC} (Optional) Install as a system service:"
+echo -e "${GREEN}5.${NC} (Optional) Install as a system service:"
 echo -e "   ${BLUE}./manage_service.sh install${NC}"
 echo ""
 
