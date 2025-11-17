@@ -428,11 +428,14 @@ async def scan_models_folder(db: SessionLocal = Depends(get_db), username: str =
         if entry.is_dir() and entry.name not in existing_model_names:
             model_path = Path(entry.path)
             if not (model_path / "config.json").exists(): continue
-            with open(model_path / "config.json") as f:
-                model_type = ModelType.EMBEDDING if any(k in json.load(f) for k in ['pooling', 'sentence_transformers', 'embedding']) else ModelType.TEXT
-            total_size = sum(f.stat().st_size for f in model_path.glob('**/*') if f.is_file())
-            db.add(Model(name=entry.name, hf_model_id=f"local/{entry.name}", path=str(model_path), model_type=model_type, download_status="completed", size_gb=total_size / (1024**3)))
-            imported_count += 1
+            try:
+                with open(model_path / "config.json") as f:
+                    model_type = ModelType.EMBEDDING if any(k in json.load(f) for k in ['pooling', 'sentence_transformers', 'embedding']) else ModelType.TEXT
+                total_size = sum(f.stat().st_size for f in model_path.glob('**/*') if f.is_file())
+                db.add(Model(name=entry.name, hf_model_id=f"local/{entry.name}", path=str(model_path), model_type=model_type, download_status="completed", size_gb=total_size / (1024**3)))
+                imported_count += 1
+            except Exception as ex:
+                print(ex)
     if imported_count > 0: db.commit()
     return {"success": True, "message": f"Successfully imported {imported_count} new model(s)." if imported_count > 0 else "No new models found to import."}
 
