@@ -354,7 +354,11 @@ async def start_model(model_id: int, db: SessionLocal = Depends(get_db), usernam
         raise HTTPException(400, "Model is already running or starting")
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model or model.download_status != "completed": raise HTTPException(404, "Model not downloaded or found.")
-    config, port, gpu_ids = model.config, find_available_port(), config.get("gpu_ids", "0")
+    
+    config = model.config
+    port = find_available_port()
+    gpu_ids = config.get("gpu_ids", "0")
+    
     cmd = [ sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(model.path), "--port", str(port),
             "--host", "0.0.0.0", "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
             "--tensor-parallel-size", str(config['tensor_parallel_size']), "--max-model-len", str(config['max_model_len']),
