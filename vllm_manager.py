@@ -71,9 +71,9 @@ class Model(Base):
     path = Column(String)
     model_type = Column(String, default=ModelType.TEXT)
     config = Column(JSON, default=lambda: {
-        "gpu_memory_utilization": 0.9, "tensor_parallel_size": 1, "max_model_len": 4096,
-        "dtype": "auto", "quantization": None, "trust_remote_code": False,
-        "enable_prefix_caching": False,
+        "gpu_ids": "0", "gpu_memory_utilization": 0.9, "tensor_parallel_size": 1, 
+        "max_model_len": 4096, "dtype": "auto", "quantization": None, 
+        "trust_remote_code": False, "enable_prefix_caching": False,
     })
     download_status = Column(String, default="not_downloaded")
     size_gb = Column(Float, default=0.0)
@@ -92,6 +92,7 @@ def get_db():
 # ============================================
 
 class ModelConfigUpdate(BaseModel):
+    gpu_ids: str
     gpu_memory_utilization: float
     tensor_parallel_size: int
     max_model_len: int
@@ -101,45 +102,21 @@ class ModelConfigUpdate(BaseModel):
     enable_prefix_caching: bool
 
 class ModelStatus(BaseModel):
-    id: int
-    name: str
-    hf_model_id: str
-    model_type: str
-    config: dict
-    download_status: str
-    size_gb: float
-    is_running: bool
-    status_text: str = "stopped"
-    port: Optional[int] = None
-    pid: Optional[int] = None
-    gpu_ids: Optional[str] = None
-    error_message: Optional[str] = None
+    id: int; name: str; hf_model_id: str; model_type: str; config: dict
+    download_status: str; size_gb: float; is_running: bool
+    status_text: str = "stopped"; port: Optional[int] = None; pid: Optional[int] = None
+    gpu_ids: Optional[str] = None; error_message: Optional[str] = None
 
 class GPUInfo(BaseModel):
-    id: int
-    name: str
-    memory_total_mb: int
-    memory_used_mb: int
-    utilization_percent: float
-    temperature: Optional[float]
-    assigned_models: List[str]
+    id: int; name: str; memory_total_mb: int; memory_used_mb: int
+    utilization_percent: float; temperature: Optional[float]; assigned_models: List[str]
 
 class DashboardStats(BaseModel):
-    total_models: int
-    running_models: int
-    system_cpu_percent: float
-    system_memory_percent: float
+    total_models: int; running_models: int; system_cpu_percent: float; system_memory_percent: float
 
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class PullModelRequest(BaseModel):
-    hf_model_id: str
-    
-class SystemInfo(BaseModel):
-    vllm_version: str
-    dev_mode: bool
+class LoginRequest(BaseModel): username: str; password: str
+class PullModelRequest(BaseModel): hf_model_id: str
+class SystemInfo(BaseModel): vllm_version: str; dev_mode: bool
 
 # ============================================
 # App Setup & Global State
@@ -169,20 +146,11 @@ def load_sessions():
         with open(SESSION_FILE, 'r') as f: sessions = json.load(f)
 
 def create_session(u: str) -> str:
-    token = secrets.token_urlsafe(32)
-    sessions[token] = {
-        "username": u, "created": datetime.now().isoformat(),
-        "expires": (datetime.now() + timedelta(seconds=SESSION_TIMEOUT)).isoformat()
-    }
-    save_sessions()
-    return token
+    token = secrets.token_urlsafe(32); sessions[token] = {"username": u, "created": datetime.now().isoformat(), "expires": (datetime.now() + timedelta(seconds=SESSION_TIMEOUT)).isoformat()}; save_sessions(); return token
 
 def verify_session(t: Optional[str]) -> bool:
     if not t or t not in sessions: return False
-    if datetime.now() > datetime.fromisoformat(sessions[t]["expires"]):
-        del sessions[t]
-        save_sessions()
-        return False
+    if datetime.now() > datetime.fromisoformat(sessions[t]["expires"]): del sessions[t]; save_sessions(); return False
     return True
 
 async def get_current_user(r: Request):
@@ -356,23 +324,24 @@ async def list_models(db: SessionLocal = Depends(get_db), username: str = Depend
 async def update_model_config(model_id: int, config: ModelConfigUpdate, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model: raise HTTPException(404, "Model not found")
-    if model.id in running_models or (model.id in model_states and model_states[model.id]['status'] == 'starting'):
+    if model.id in running_models or (model_id in model_states and model_states[model_id]['status'] == 'starting'):
         raise HTTPException(400, "Cannot edit a model that is running or starting. Please stop it first.")
     model.config = config.dict(); db.commit(); return {"success": True}
 
 @app.post("/api/models/{model_id}/start")
-async def start_model(model_id: int, gpu_ids: str = "0", db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
+async def start_model(model_id: int, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
     if model_id in running_models or (model_id in model_states and model_states[model_id]['status'] == 'starting'):
         raise HTTPException(400, "Model is already running or starting")
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model or model.download_status != "completed": raise HTTPException(404, "Model not downloaded")
-    config = model.config; port = find_available_port()
+    config = model.config; port = find_available_port(); gpu_ids = config.get("gpu_ids", "0")
     cmd = [ sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(model.path), "--port", str(port),
             "--host", "0.0.0.0", "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
             "--tensor-parallel-size", str(config['tensor_parallel_size']), "--max-model-len", str(config['max_model_len']),
             "--dtype", config['dtype']]
     if config.get('quantization'): cmd.extend(["--quantization", config['quantization']])
     if config.get('trust_remote_code'): cmd.append("--trust-remote-code")
+    if config.get('enable_prefix_caching'): cmd.append("--enable-prefix-caching")
     env = os.environ.copy(); env["CUDA_VISIBLE_DEVICES"] = gpu_ids
     
     model_states[model_id] = {"status": "starting"}
@@ -460,7 +429,6 @@ async def delete_model(model_id: int, db: SessionLocal = Depends(get_db), userna
     if model.path and Path(model.path).exists(): shutil.rmtree(model.path)
     db.delete(model); db.commit()
     return {"success": True}
-
 @app.post("/api/models/pull")
 async def pull_model(req: PullModelRequest, db: SessionLocal = Depends(get_db), username: str = Depends(get_current_user)):
     model_name = req.hf_model_id.split('/')[-1]
