@@ -68,7 +68,7 @@ const app = {
 
                 return `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between flex-wrap gap-4">
-                    <div class="flex-grow">
+                    <div class="flex-grow min-w-0">
                         <h4 class="font-bold text-lg">${m.name}</h4>
                         <p class="text-sm text-gray-400">${m.hf_model_id}</p>
                         <div class="text-xs mt-2 flex flex-wrap gap-2 items-center">
@@ -76,7 +76,7 @@ const app = {
                             <span class="inline-block bg-gray-700 rounded-full px-3 py-1 text-sm font-semibold text-gray-300">Type: ${m.model_type}</span>
                             <div class="inline-block rounded-full px-3 py-1 text-sm font-semibold">${statusBadge}</div>
                         </div>
-                        ${m.status_text === 'error' ? `<p class="text-red-400 text-xs mt-2 truncate">Error: ${m.error_message}</p>` : ''}
+                        ${m.status_text === 'error' ? `<p class="text-red-400 text-xs mt-2 break-words">Error: ${m.error_message}</p>` : ''}
                     </div>
                     <div class="flex items-center space-x-2">
                         ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
@@ -229,18 +229,25 @@ const app = {
         this.ui.showLogModal(modalTitle);
         const ws = new WebSocket(`ws://${window.location.host}${wsPath}`);
         ws.onmessage = (event) => {
-            if (event.data.startsWith('---') && event.data.endsWith('---')) {
-                this.ui.appendLog(`\n\n✅ ${event.data.replaceAll('-', '')} COMPLETE\n`);
+            const data = event.data;
+            if (data && data.startsWith('---') && data.endsWith('---')) {
+                const status = data.replaceAll('-', '').trim();
+                if (status.includes("SUCCESS") || status.includes("COMPLETE")) {
+                    this.ui.appendLog(`\n\n✅ ${status.replace('COMPLETE', 'SUCCESS')}\n`);
+                } else {
+                    this.ui.appendLog(`\n\n❌ ${status}\n`);
+                }
                 ws.close();
-            } else {
-                this.ui.appendLog(event.data);
+            } else if (data) {
+                this.ui.appendLog(data);
             }
         };
-        ws.onerror = (err) => this.ui.appendLog(`\n\n❌ WebSocket Error: ${err}\n`);
+        ws.onerror = () => this.ui.appendLog(`\n\n❌ WebSocket Error\n`);
         ws.onclose = () => {
             this.loadDashboard();
         };
     },
+
     async pullModel() {
         const hf_model_id = document.getElementById('hf-model-id').value;
         if (!hf_model_id) return alert('Please enter a HuggingFace Model ID.');
@@ -263,8 +270,21 @@ const app = {
     },
 
     async startModel(id) {
-        try { await this.api.post(`/api/models/${id}/start`); this.loadDashboard(); }
-        catch (e) { alert('Failed to start model: ' + e.message); }
+        try {
+            const models = await this.api.get('/api/models');
+            const model = models.find(m => m.id === id);
+            if (!model) {
+                alert('Model not found to start');
+                return;
+            }
+            await this.api.post(`/api/models/${id}/start`);
+            this.loadModels();
+            this.listenForLogs(`/ws/start/${id}`, `Starting ${model.name}`);
+        }
+        catch (e) {
+            alert('Failed to start model: ' + e.message);
+            this.loadModels();
+        }
     },
 
     async stopModel(id) {

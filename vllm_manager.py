@@ -130,6 +130,7 @@ model_states: Dict[int, dict] = {} # For transient states like 'starting', 'erro
 sessions: Dict[str, dict] = {}
 download_tasks: Dict[int, dict] = {}
 upgrade_task: Dict = {}
+start_logs: Dict[int, dict] = {}
 
 # ============================================
 # Authentication & Sessions
@@ -163,15 +164,15 @@ async def get_current_user(r: Request):
 # ============================================
 
 async def health_check_task(model_id: int, port: int, process: subprocess.Popen, model_name: str, gpu_ids: str):
+    log_q = start_logs.get(model_id, {}).get('log_queue')
     try:
         await asyncio.sleep(5)
         if process.poll() is not None:
-            stdout_output = process.stdout.read() if process.stdout else ""
-            stderr_output = process.stderr.read() if process.stderr else ""
-            error_output = (stdout_output + stderr_output).strip() or "No error output."
-            model_states[model_id] = {"status": "error", "message": f"Process died unexpectedly. Error: {error_output[:500]}"}
+            error_msg = "Process died unexpectedly. Check logs for details."
+            model_states[model_id] = {"status": "error", "message": error_msg}
+            if log_q: log_q.put(f"---START FAILURE---\n{error_msg}")
             return
-            
+
         async with httpx.AsyncClient() as client:
             for _ in range(45): # ~90 second timeout for health check
                 if process.poll() is not None:
@@ -182,6 +183,7 @@ async def health_check_task(model_id: int, port: int, process: subprocess.Popen,
                         running_models[model_id] = {"process": process, "pid": process.pid, "port": port, "gpu_ids": gpu_ids, "name": model_name}
                         if model_id in model_states: del model_states[model_id]
                         print(f"Model '{model_name}' (ID: {model_id}) started successfully on port {port}.")
+                        if log_q: log_q.put("---START SUCCESS---")
                         return
                 except httpx.RequestError:
                     pass # Service not ready yet
@@ -191,19 +193,19 @@ async def health_check_task(model_id: int, port: int, process: subprocess.Popen,
 
     except Exception as e:
         if process.poll() is None:
-            try:
-                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            try: os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            except ProcessLookupError: pass
         
-        stdout_output = process.stdout.read() if process.stdout else ""
-        stderr_output = process.stderr.read() if process.stderr else ""
-        error_output = (stdout_output + stderr_output).strip()
-        
-        full_error_message = f"Startup failed: {str(e)}. Process Output: {error_output[:500]}"
+        full_error_message = f"Startup failed: {str(e)}. Check logs for details."
         model_states[model_id] = {"status": "error", "message": full_error_message}
         print(f"Error starting model '{model_name}' (ID: {model_id}): {full_error_message}")
-
+        if log_q: log_q.put(f"---START FAILURE---\n{full_error_message}")
+    finally:
+        if log_q: log_q.put(None) # Sentinel to close websocket
+        if model_id in start_logs:
+            # Give a moment for the websocket to send the final message
+            await asyncio.sleep(1)
+            del start_logs[model_id]
 
 def download_model_task(db_id: int, hf_model_id: str, model_name: str):
     log_q = queue.Queue()
@@ -232,6 +234,7 @@ def download_model_task(db_id: int, hf_model_id: str, model_name: str):
             model = db.query(Model).filter(Model.id == db_id).first()
             if model: model.download_status = "error"; db.commit()
     finally:
+        log_q.put("---DOWNLOAD COMPLETE---")
         log_q.put(None)
         if 'db' in locals() and db.is_active: db.close()
 
@@ -259,6 +262,7 @@ def upgrade_vllm_task():
     except Exception as e:
         log(f"\n❌ ERROR: {str(e)}")
     finally:
+        log_q.put("---UPGRADE COMPLETE---")
         log_q.put(None); upgrade_task.clear()
 
 def get_system_info_sync():
@@ -344,8 +348,17 @@ async def start_model(model_id: int, db: SessionLocal = Depends(get_db), usernam
     if config.get('enable_prefix_caching'): cmd.append("--enable-prefix-caching")
     env = os.environ.copy(); env["CUDA_VISIBLE_DEVICES"] = gpu_ids
     
+    log_q = queue.Queue()
+    start_logs[model_id] = {'log_queue': log_q}
+    process = subprocess.Popen(cmd, env=env, preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    
+    def stream_output(proc, q):
+        for line in iter(proc.stdout.readline, ''):
+            q.put(line)
+
+    Thread(target=stream_output, args=(process, log_q), daemon=True).start()
+
     model_states[model_id] = {"status": "starting"}
-    process = subprocess.Popen(cmd, env=env, preexec_fn=os.setsid, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     asyncio.create_task(health_check_task(model.id, port, process, model.name, gpu_ids))
     return {"success": True, "message": "Model start initiated."}
 
@@ -456,12 +469,27 @@ async def pull_model_ws(websocket: WebSocket, model_id: int):
     log_q = download_tasks[model_id].get('log_queue')
     try:
         while True:
-            log_line = log_q.get()
+            log_line = await asyncio.to_thread(log_q.get)
             if log_line is None: break
             await websocket.send_text(log_line)
-        await websocket.send_text("---DOWNLOAD-COMPLETE---")
+    except WebSocketDisconnect:
+        pass
     finally:
         if model_id in download_tasks: del download_tasks[model_id]
+        
+@app.websocket("/ws/start/{model_id}")
+async def start_model_ws(websocket: WebSocket, model_id: int):
+    await websocket.accept()
+    if model_id not in start_logs or 'log_queue' not in start_logs[model_id]:
+        await websocket.close(); return
+    log_q = start_logs[model_id].get('log_queue')
+    try:
+        while True:
+            log_line = await asyncio.to_thread(log_q.get)
+            if log_line is None: break
+            await websocket.send_text(log_line)
+    except WebSocketDisconnect:
+        pass
 
 @app.websocket("/ws/upgrade")
 async def upgrade_vllm_ws(websocket: WebSocket):
@@ -470,10 +498,9 @@ async def upgrade_vllm_ws(websocket: WebSocket):
     log_q = upgrade_task['log_queue']
     try:
         while True:
-            log_line = log_q.get()
+            log_line = await asyncio.to_thread(log_q.get)
             if log_line is None: break
             await websocket.send_text(log_line)
-        await websocket.send_text("---UPGRADE-COMPLETE---")
     except WebSocketDisconnect: pass
 
 # ============================================
