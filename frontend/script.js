@@ -214,10 +214,26 @@ const app = {
     },
 
     async init() {
-        document.getElementById('login-form').addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
-        document.getElementById('toggle-password-btn').addEventListener('click', () => { this.togglePasswordVisibility(); });
-        document.getElementById('admin-settings-btn').addEventListener('click', () => this.openAdminSettingsModal());
-        document.getElementById('save-admin-settings-btn').addEventListener('click', () => this.changePassword());
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+        }
+
+        const togglePasswordBtn = document.getElementById('toggle-password-btn');
+        if (togglePasswordBtn) {
+            togglePasswordBtn.addEventListener('click', () => { this.togglePasswordVisibility(); });
+        }
+
+        const adminSettingsBtn = document.getElementById('admin-settings-btn');
+        if (adminSettingsBtn) {
+            adminSettingsBtn.addEventListener('click', () => this.openAdminSettingsModal());
+        }
+
+        const saveAdminSettingsBtn = document.getElementById('save-admin-settings-btn');
+        if (saveAdminSettingsBtn) {
+            saveAdminSettingsBtn.addEventListener('click', () => this.changePassword());
+        }
+
         try {
             const auth = await this.api.get('/api/check-auth');
             if (auth.authenticated) {
