@@ -53,13 +53,19 @@
             </header>
 
             <main class="container mx-auto p-4 sm:p-6 lg:p-8">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    
-                    <!-- System & Upgrade Card -->
-                    <div id="system-info-card" class="bg-gray-800 p-6 rounded-lg shadow-lg col-span-1"></div>
+                <!-- Stats Grid -->
+                <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8"></div>
 
-                    <!-- Pull Model Card -->
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg col-span-1 md:col-span-2">
+                <!-- GPU Info -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold mb-4">GPU Status</h2>
+                    <div id="gpu-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </div>
+
+                <!-- Management Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div id="system-info-card" class="bg-gray-800 p-6 rounded-lg shadow-lg"></div>
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg lg:col-span-2">
                         <h3 class="text-lg font-semibold mb-4">Pull New Model</h3>
                         <div class="flex space-x-2">
                             <input id="hf-model-id" placeholder="HuggingFace Model ID (e.g., facebook/opt-125m)" class="flex-grow px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -69,7 +75,7 @@
                 </div>
 
                 <!-- Models List -->
-                <div class="mt-8">
+                <div>
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-2xl font-bold">Managed Models</h2>
                         <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
@@ -82,7 +88,7 @@
             </main>
         </div>
 
-        <!-- Log Modal -->
+        <!-- Modals -->
         <div id="log-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-full max-h-[80vh] flex flex-col">
                 <div class="p-4 border-b border-gray-700 flex justify-between items-center">
@@ -90,6 +96,41 @@
                     <button onclick="app.hideLogModal()" class="text-gray-400 hover:text-white">&times;</button>
                 </div>
                 <pre id="log-pre" class="p-4 flex-grow overflow-y-auto text-sm log-pre bg-gray-900"></pre>
+            </div>
+        </div>
+        
+        <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
+                </div>
+                <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="hidden" id="edit-model-id">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">GPU Memory Utilization</label>
+                        <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">Tensor Parallel Size</label>
+                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Max Model Length</label>
+                        <input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">Datatype</label>
+                        <input type="text" id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-300">Quantization</label>
+                        <input type="text" placeholder="e.g., awq, gptq (or leave blank)" id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                </form>
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
+                    <button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                    <button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
+                </div>
             </div>
         </div>
 
