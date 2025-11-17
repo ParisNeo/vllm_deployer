@@ -316,7 +316,7 @@ async def pull_model(req: PullModelRequest, db: SessionLocal = Depends(get_db), 
     download_tasks[new_model.id] = {'thread': thread}; thread.start()
     return {"success": True, "model_id": new_model.id}
 
-@websocket_endpoint("/ws/pull/{model_id}")
+@app.websocket("/ws/pull/{model_id}")
 async def pull_model_ws(websocket: WebSocket, model_id: int):
     await websocket.accept()
     if model_id not in download_tasks or 'log_queue' not in download_tasks[model_id]:
