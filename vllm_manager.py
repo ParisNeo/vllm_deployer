@@ -401,6 +401,8 @@ async def stop_model(model_id: int, username: str = Depends(get_current_user)):
 async def clear_error_state(model_id: int, username: str = Depends(get_current_user)):
     if model_id in model_states and model_states[model_id]['status'] == 'error':
         del model_states[model_id]
+        if model_id in log_broadcasters:
+            del log_broadcasters[model_id]
         return {"success": True}
     raise HTTPException(status_code=404, detail="No error state to clear for this model.")
 
@@ -525,4 +527,4 @@ async def read_index(request: Request): return FileResponse('frontend/index.html
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=MANAGER_PORT)
+    uvicorn.run(app, host="0.0.0.0", port=MANAGER_PORT)```

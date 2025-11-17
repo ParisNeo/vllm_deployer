@@ -83,7 +83,7 @@ const app = {
                     <div class="flex items-center space-x-2">
                         ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
                         ${m.status_text !== 'starting' ? `<button onclick="app.openEditModal(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Edit</button>` : ''}
-                        ${m.status_text === 'running' ? `<button onclick="app.showRuntimeLogs(${m.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Logs</button>` : ''}
+                        ${(m.status_text === 'running' || m.status_text === 'error') ? `<button onclick="app.showRuntimeLogs(${m.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Logs</button>` : ''}
                         ${m.download_status === 'completed' && !m.is_running && m.status_text !== 'starting' && m.status_text !== 'error' ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
                         ${m.status_text === 'running' ? `<button onclick="app.stopModel(${m.id})" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Stop</button>` : ''}
                         <button onclick="app.deleteModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Delete</button>
@@ -490,7 +490,11 @@ const app = {
             alert('Failed to save configuration: ' + e.message);
         }
     },
-
+    
+    hideLogModal() {
+        this.ui.hideLogModal();
+    },
+    
     hideEditModal() {
         this.ui.hideEditModal();
     },
