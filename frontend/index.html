@@ -8,6 +8,13 @@
     <style>
         .modal-bg { background-color: rgba(0,0,0,0.5); }
         .log-pre { white-space: pre-wrap; word-wrap: break-word; }
+        .tooltip { position: relative; display: inline-block; }
+        .tooltip .tooltiptext {
+            visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: center;
+            border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%;
+            margin-left: -100px; opacity: 0; transition: opacity 0.3s;
+        }
+        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200">
@@ -106,6 +113,10 @@
                 </div>
                 <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="hidden" id="edit-model-id">
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">GPU IDs</label>
+                        <input type="text" id="edit-gpu-ids" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-300">GPU Memory Utilization</label>
                         <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
@@ -122,9 +133,19 @@
                         <label class="block text-sm font-medium text-gray-300">Datatype</label>
                         <input type="text" id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
                     </div>
-                    <div class="md:col-span-2">
+                    <div>
                         <label class="block text-sm font-medium text-gray-300">Quantization</label>
                         <input type="text" placeholder="e.g., awq, gptq (or leave blank)" id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div class="md:col-span-2 flex items-center space-x-4">
+                         <div class="flex items-center">
+                            <input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
+                            <label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300">Trust Remote Code</label>
+                        </div>
+                         <div class="flex items-center">
+                            <input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
+                            <label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300">Enable Prefix Caching</label>
+                        </div>
                     </div>
                 </form>
                 <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">

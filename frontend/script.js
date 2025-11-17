@@ -81,7 +81,7 @@ const app = {
                     <div class="flex items-center space-x-2">
                         ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
                         ${m.status_text !== 'starting' ? `<button onclick="app.openEditModal(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Edit</button>` : ''}
-                        ${m.status_text === 'completed' && !m.is_running ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
+                        ${m.download_status === 'completed' && !m.is_running && m.status_text !== 'starting' && m.status_text !== 'error' ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
                         ${m.status_text === 'running' ? `<button onclick="app.stopModel(${m.id})" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Stop</button>` : ''}
                         <button onclick="app.deleteModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Delete</button>
                     </div>
@@ -321,7 +321,54 @@ const app = {
     hideLogModal() {
         this.ui.hideLogModal();
     },
-    async openEditModal(modelId) { /* ... same as before */ },
-    async saveModelConfig() { /* ... same as before */ },
-    hideEditModal() { /* ... same as before */ },
+    
+    async openEditModal(modelId) {
+        try {
+            const models = await this.api.get('/api/models');
+            const model = models.find(m => m.id === modelId);
+            if (!model) {
+                alert('Model not found!');
+                return;
+            }
+            document.getElementById('edit-model-id').value = model.id;
+            document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
+            document.getElementById('edit-gpu-ids').value = model.config.gpu_ids || '0';
+            document.getElementById('edit-gpu-mem').value = model.config.gpu_memory_utilization;
+            document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size;
+            document.getElementById('edit-max-len').value = model.config.max_model_len;
+            document.getElementById('edit-dtype').value = model.config.dtype;
+            document.getElementById('edit-quantization').value = model.config.quantization || '';
+            document.getElementById('edit-trust-remote-code').checked = model.config.trust_remote_code;
+            document.getElementById('edit-prefix-caching').checked = model.config.enable_prefix_caching;
+            this.ui.showEditModal();
+        } catch (e) {
+            alert('Could not fetch model details: ' + e.message);
+        }
+    },
+
+    async saveModelConfig() {
+        const modelId = document.getElementById('edit-model-id').value;
+        const config = {
+            gpu_ids: document.getElementById('edit-gpu-ids').value,
+            gpu_memory_utilization: parseFloat(document.getElementById('edit-gpu-mem').value),
+            tensor_parallel_size: parseInt(document.getElementById('edit-tensor-parallel').value),
+            max_model_len: parseInt(document.getElementById('edit-max-len').value),
+            dtype: document.getElementById('edit-dtype').value,
+            quantization: document.getElementById('edit-quantization').value || null,
+            trust_remote_code: document.getElementById('edit-trust-remote-code').checked,
+            enable_prefix_caching: document.getElementById('edit-prefix-caching').checked
+        };
+
+        try {
+            await this.api.put(`/api/models/${modelId}/config`, config);
+            this.ui.hideEditModal();
+            this.loadModels();
+        } catch (e) {
+            alert('Failed to save configuration: ' + e.message);
+        }
+    },
+
+    hideEditModal() {
+        this.ui.hideEditModal();
+    }
 };
