@@ -15,8 +15,14 @@ const app = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-            if (endpoint === '/api/login' && res.redirected) return { success: true };
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            // For login, backend redirects and sets cookie, so a simple ok check is enough.
+            // The key is that the browser now has the cookie for subsequent requests.
+            if (!res.ok) {
+                 const error = await res.json().catch(() => ({ detail: 'Login failed' }));
+                 throw new Error(error.detail);
+            }
+             // For login, we don't need to parse JSON as the server might not return a body on success.
+            if (endpoint === '/api/login') return { success: true };
             return res.json();
         },
         async del(endpoint) {
@@ -82,6 +88,16 @@ const app = {
     },
 
     async init() {
+        // Attach event listeners
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.login();
+        });
+        document.getElementById('toggle-password-btn').addEventListener('click', () => {
+            this.togglePasswordVisibility();
+        });
+
+        // Check auth status
         try {
             const auth = await this.api.get('/api/check-auth');
             if (auth.authenticated) {
@@ -100,20 +116,25 @@ const app = {
         const username = document.getElementById('username').value;
         const password = document.getElementById('password').value;
         const errorEl = document.getElementById('login-error');
+        errorEl.classList.add('hidden');
         try {
             const res = await this.api.post('/api/login', { username, password });
             if (res.success) {
-                window.location.reload();
+                // On successful login, re-initialize the app state.
+                // This will trigger the auth check again, which will now pass
+                // because the cookie is set, and then render the dashboard.
+                await this.init();
             }
         } catch (e) {
-            errorEl.textContent = 'Login failed. Please check your credentials.';
+            errorEl.textContent = 'Login failed: ' + e.message;
             errorEl.classList.remove('hidden');
         }
     },
 
     async logout() {
         await this.api.post('/api/logout', {});
-        window.location.reload();
+        // After logout, re-init to show the login page
+        await this.init();
     },
 
     async loadDashboard() {
@@ -194,6 +215,21 @@ const app = {
             } catch (e) {
                 alert('Failed to start upgrade: ' + e.message);
             }
+        }
+    },
+
+    togglePasswordVisibility() {
+        const passwordInput = document.getElementById('password');
+        const eyeOpen = document.getElementById('eye-open-icon');
+        const eyeClosed = document.getElementById('eye-closed-icon');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeOpen.classList.add('hidden');
+            eyeClosed.classList.remove('hidden');
+        } else {
+            passwordInput.type = 'password';
+            eyeOpen.classList.remove('hidden');
+            eyeClosed.classList.add('hidden');
         }
     },
 
