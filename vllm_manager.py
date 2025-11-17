@@ -163,7 +163,7 @@ class LogBroadcaster:
 # ============================================
 # App Setup & Global State
 # ============================================
-app = FastAPI(title="vLLM Manager Pro", version="3.2.0")
+app = FastAPI(title="vLLM Manager Pro", version="3.2.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 running_models: Dict[int, dict] = {}
@@ -215,16 +215,19 @@ async def health_check_task(model_id: int, port: int, process: subprocess.Popen,
                 if process.poll() is not None:
                     raise RuntimeError("Process terminated during health checks.")
                 try:
-                    res = await client.get(f"http://127.0.0.1:{port}/health", timeout=2.0)
+                    res = await client.get(f"http://127.0.0.1:{port}/v1/models", timeout=2.0)
                     if res.status_code == 200:
-                        running_models[model_id] = {"process": process, "pid": process.pid, "port": port, "gpu_ids": gpu_ids, "name": model_name}
-                        if model_id in model_states: del model_states[model_id]
-                        print(f"Model '{model_name}' (ID: {model_id}) started successfully on port {port}.")
-                        broadcaster.push("---START SUCCESS---")
-                        return
+                        data = res.json()
+                        model_names_in_response = [m["id"] for m in data.get("data", [])]
+                        if model_name in model_names_in_response:
+                            running_models[model_id] = {"process": process, "pid": process.pid, "port": port, "gpu_ids": gpu_ids, "name": model_name}
+                            if model_id in model_states: del model_states[model_id]
+                            print(f"Model '{model_name}' (ID: {model_id}) started successfully on port {port}.")
+                            broadcaster.push("---START SUCCESS---")
+                            return
                 except httpx.RequestError: pass
                 await asyncio.sleep(2)
-        raise RuntimeError("Health check timed out after 90 seconds.")
+        raise RuntimeError("Health check timed out after 90 seconds. Model server may have failed to load the model.")
     except Exception as e:
         if process.poll() is None:
             try: os.killpg(os.getpgid(process.pid), signal.SIGTERM)
@@ -359,9 +362,14 @@ async def start_model(model_id: int, db: SessionLocal = Depends(get_db), usernam
     port = find_available_port()
     gpu_ids = config.get("gpu_ids", "0")
     
-    cmd = [ sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(model.path), "--port", str(port),
-            "--host", "0.0.0.0", "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
-            "--tensor-parallel-size", str(config['tensor_parallel_size']), "--max-model-len", str(config['max_model_len']),
+    cmd = [ sys.executable, "-m", "vllm.entrypoints.openai.api_server", 
+            "--model", str(model.path), 
+            "--served-model-name", model.name,
+            "--port", str(port),
+            "--host", "0.0.0.0", 
+            "--gpu-memory-utilization", str(config['gpu_memory_utilization']),
+            "--tensor-parallel-size", str(config['tensor_parallel_size']), 
+            "--max-model-len", str(config['max_model_len']),
             "--dtype", config['dtype']]
     if config.get('quantization'): cmd.extend(["--quantization", config['quantization']])
     if config.get('trust_remote_code'): cmd.append("--trust-remote-code")
