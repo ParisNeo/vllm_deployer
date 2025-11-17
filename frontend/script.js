@@ -53,6 +53,7 @@ const app = {
         },
         renderModelList(models) {
             const listEl = document.getElementById('model-list');
+            if (!listEl) return;
             if (models.length === 0) {
                 listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model or scan the models folder to get started.</div>`;
                 return;
@@ -92,6 +93,7 @@ const app = {
         },
         renderSystemInfo(info) {
             const el = document.getElementById('system-info-card');
+            if (!el) return;
             el.innerHTML = `
                 <h3 class="text-lg font-semibold mb-2">System Information</h3>
                 <p class="text-sm">vLLM Version: <strong class="text-indigo-400">${info.vllm_version}</strong></p>
@@ -101,6 +103,7 @@ const app = {
         },
         renderDashboardStats(stats) {
             const el = document.getElementById('stats-grid');
+            if (!el) return;
             el.innerHTML = `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
                     <h4 class="text-sm font-medium text-gray-400">CPU Usage</h4>
@@ -122,6 +125,7 @@ const app = {
         },
         renderGpuList(gpus) {
             const el = document.getElementById('gpu-list');
+            if (!el) return;
             if (!gpus || gpus.length === 0) {
                 el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
                 return;
@@ -162,6 +166,7 @@ const app = {
         },
         appendLog(text) {
             const pre = document.getElementById('log-pre');
+            if (!pre) return;
             pre.textContent += text;
             pre.scrollTop = pre.scrollHeight;
         },
@@ -172,9 +177,9 @@ const app = {
         renderAdminSettings(settings) {
             const contentEl = document.getElementById('admin-settings-content');
             const saveBtn = document.getElementById('save-admin-settings-btn');
-            let html = ``;
-
-            html += `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
+            if (!contentEl || !saveBtn) return;
+            
+            let html = `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
             
             if (settings.is_password_env_managed) {
                 html += `<div class="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded relative" role="alert">
@@ -510,6 +515,7 @@ const app = {
         const confirmPassword = document.getElementById('confirm-password').value;
         const errorEl = document.getElementById('password-change-error');
         
+        if (!errorEl) return;
         errorEl.classList.add('hidden');
 
         if (!newPassword || newPassword !== confirmPassword) {
