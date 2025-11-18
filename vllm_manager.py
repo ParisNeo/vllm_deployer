@@ -381,7 +381,7 @@ def download_model_task(db_id: int, hf_model_id: str, model_name: str):
                     log("Detected embedding model type.")
         db.commit()
         log("Model setup complete.")
-        # Ensure any previous error state is cleared
+        # Clear any stale error state
         model_states.pop(db_id, None)
     except Exception as e:
         log(f"ERROR: {str(e)}")
@@ -392,7 +392,7 @@ def download_model_task(db_id: int, hf_model_id: str, model_name: str):
         ):
             model.download_status = "error"
             db.commit()
-            # Record error state for UI consumption
+            # Record error for UI
             model_states[db_id] = {"status": "error", "message": str(e)}
     finally:
         log_q.put("---DOWNLOAD COMPLETE---")
@@ -675,15 +675,15 @@ async def stop_model(
 async def clear_error_state(
     model_id: int, username: str = Depends(get_current_user)
 ):
-    if model_id in model_states and model_states[model_id]["status"] == "error":
+    """
+    Clear any stored error state for a model, regardless of its current status.
+    """
+    if model_id in model_states:
         del model_states[model_id]
-        if model_id in log_broadcasters:
-            del log_broadcasters[model_id]
-        return {"success": True}
-    raise HTTPException(
-        status_code=404,
-        detail="No error state to clear for this model.",
-    )
+    if model_id in log_broadcasters:
+        del log_broadcasters[model_id]
+    # Always return success – even if there was no error recorded.
+    return {"success": True}
 
 
 @app.get("/api/dashboard/stats", response_model=DashboardStats)
