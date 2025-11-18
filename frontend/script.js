@@ -411,8 +411,14 @@ const app = {
     },
 
     async clearError(id) {
-        try { await this.api.post(`/api/models/${id}/clear_error`); this.loadDashboard(); }
-        catch (e) { alert('Failed to clear error state: ' + e.message); }
+        try {
+            // Call backend to clear error state and reset download_status
+            await this.api.post(`/api/models/${id}/clear_error`);
+            // Refresh the dashboard so UI reflects the updated status
+            this.loadDashboard();
+        } catch (e) {
+            alert('Failed to clear error state: ' + e.message);
+        }
     },
 
     async upgradeVLLM() {
