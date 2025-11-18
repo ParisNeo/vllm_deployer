@@ -1,47 +1,289 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>vLLM Manager</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .modal-bg { background-color: rgba(0,0,0,0.5); }
-        .log-pre { white-space: pre-wrap; word-wrap: break-word; }
-        .tooltip { position: relative; display: inline-block; }
-        .tooltip .tooltiptext {
-            visibility: hidden; width: 200px; background-color: #555; color: #fff; text-align: center;
-            border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%;
-            margin-left: -100px; opacity: 0; transition: opacity 0.3s;
+        /* Basic Reset */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body { height: 100%; font-family: Arial, Helvetica, sans-serif; }
+
+        body {
+            background: #1a202c;               /* gray-900 */
+            color: #e2e8f0;                    /* gray-200 */
         }
-        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+
+        a { color: inherit; text-decoration: none; }
+
+        .hidden { display: none; }
+
+        /* Layout helpers */
+        .centered-flex {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .grid-2 { grid-template-columns: repeat(2, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+        /* Card / Panel */
+        .card {
+            background: #2d3748;               /* gray-800 */
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .card h2, .card h3, .card h4 { color: #fff; }
+
+        .input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            margin-top: 0.25rem;
+            background: #4a5568;               /* gray-700 */
+            border: 1px solid #718096;         /* gray-600 */
+            border-radius: 0.25rem;
+            color: #e2e8f0;
+            font-size: 1rem;
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: #5a67d8;            /* indigo-500 */
+            box-shadow: 0 0 0 2px rgba(90,103,216,0.5);
+        }
+
+        .btn {
+            display: inline-block;
+            font-weight: 600;
+            text-align: center;
+            border-radius: 0.25rem;
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .btn-primary {
+            background: #5a67d8;               /* indigo-600 */
+            color: #fff;
+        }
+        .btn-primary:hover { background: #4c51bf; }
+
+        .btn-secondary {
+            background: #4a5568;               /* gray-700 */
+            color: #fff;
+        }
+        .btn-secondary:hover { background: #2d3748; }
+
+        .btn-danger {
+            background: #e53e3e;               /* red-600 */
+            color: #fff;
+        }
+        .btn-danger:hover { background: #c53030; }
+
+        .btn-success {
+            background: #38a169;               /* green-600 */
+            color: #fff;
+        }
+        .btn-success:hover { background: #2f855a; }
+
+        .btn-warning {
+            background: #d69e2e;               /* yellow-600 */
+            color: #fff;
+        }
+        .btn-warning:hover { background: #b7791f; }
+
+        .text-sm { font-size: 0.875rem; }
+        .text-xs { font-size: 0.75rem; }
+        .font-bold { font-weight: 700; }
+        .font-medium { font-weight: 500; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mr-2 { margin-right: 0.5rem; }
+        .ml-1 { margin-left: 0.25rem; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
+        .space-x-2 > * + * { margin-left: 0.5rem; }
+        .space-x-4 > * + * { margin-left: 1rem; }
+        .space-y-4 > * + * { margin-top: 1rem; }
+        .rounded-full { border-radius: 9999px; }
+        .rounded-md { border-radius: 0.375rem; }
+        .overflow-y-auto { overflow-y: auto; }
+        .overflow-hidden { overflow: hidden; }
+        .w-full { width: 100%; }
+        .max-w-sm { max-width: 24rem; }
+        .max-w-2xl { max-width: 42rem; }
+        .max-w-4xl { max-width: 64rem; }
+        .h-2-5 { height: 0.625rem; }
+        .h-4 { height: 1rem; }
+        .w-4 { width: 1rem; }
+        .bg-gray-800 { background: #2d3748; }
+        .bg-gray-700 { background: #4a5568; }
+        .bg-gray-600 { background: #718096; }
+        .bg-gray-500 { background: #a0aec0; }
+        .bg-indigo-600 { background: #5a67d8; }
+        .bg-indigo-500 { background: #667eea; }
+        .bg-green-600 { background: #38a169; }
+        .bg-red-600 { background: #e53e3e; }
+        .bg-yellow-600 { background: #d69e2e; }
+        .bg-blue-600 { background: #3182ce; }
+        .bg-gray-900 { background: #1a202c; }
+        .bg-gray-800/80 { background: rgba(45,55,72,0.8); }
+        .bg-gray-800/50 { background: rgba(45,55,72,0.5); }
+
+        .text-gray-400 { color: #cbd5e0; }
+        .text-gray-300 { color: #e2e8f0; }
+        .text-gray-200 { color: #edf2f7; }
+        .text-white { color: #fff; }
+        .text-red-400 { color: #fc8181; }
+        .text-green-400 { color: #9ae6b4; }
+        .text-indigo-400 { color: #a3bffa; }
+
+        .border { border: 1px solid; }
+        .border-gray-600 { border-color: #718096; }
+        .border-gray-700 { border-color: #4a5568; }
+        .border-yellow-700 { border-color: #b7791f; }
+
+        .shadow-md { box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .shadow-lg { box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+
+        .transition { transition: all 0.2s; }
+
+        /* Modal */
+        .modal-bg {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+
+        .modal {
+            background: #2d3748;
+            border-radius: 0.5rem;
+            width: 90%;
+            max-width: 64rem;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 1rem;
+            border-bottom: 1px solid #4a5568;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 1rem;
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 1rem;
+            border-top: 1px solid #4a5568;
+            text-align: right;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: #cbd5e0;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .close-btn:hover { color: #fff; }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        pre.log-pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: #1a202c;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            color: #e2e8f0;
+        }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-200">
+<body>
 
     <!-- Main Container -->
     <div id="app" class="min-h-screen">
-        
+
         <!-- Login View -->
-        <div id="login-view" class="flex items-center justify-center min-h-screen">
-            <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
+        <div id="login-view" class="centered-flex">
+            <div class="card max-w-sm">
                 <h2 class="text-2xl font-bold text-center text-white mb-6">vLLM Manager Login</h2>
                 <form id="login-form" class="space-y-4">
-                    <input id="username" type="text" placeholder="Username" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="username">
+                    <input id="username" type="text" placeholder="Username" class="input" autocomplete="username">
                     <div class="relative">
-                        <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="current-password">
-                        <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-200">
+                        <input id="password" type="password" placeholder="Password" class="input" autocomplete="current-password">
+                        <button type="button" id="toggle-password-btn" class="close-btn absolute inset-y-0 right-0 px-3 flex items-center">
                             <svg id="eye-open-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                                 <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.02 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
                             </svg>
-                             <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
+                            <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zM10 12a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
                                 <path d="M2 4.272l2.272 2.272A9.959 9.959 0 0010.001 3c4.478 0 8.268 2.943 9.542 7 .274.855.458 1.742.458 2.641 0 1.164-.223 2.277-.635 3.286l-2.42-2.42A4.002 4.002 0 0010 10a4 4 0 00-3.232 1.57l-1.12-1.122a2.001 2.001 0 013.163-2.13zM1.458 10C2.732 14.057 6.522 17 10 17a9.95 9.95 0 005.137-1.432l-2.072-2.072a4 4 0 01-5.59-5.59l-2.45-2.45A10.005 10.005 0 001.458 10z" />
                             </svg>
                         </button>
                     </div>
-                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Login</button>
+                    <button type="submit" class="btn btn-primary w-full">Login</button>
                     <p id="login-error" class="text-red-400 text-sm text-center hidden"></p>
                 </form>
             </div>
@@ -50,33 +292,33 @@
         <!-- Dashboard View -->
         <div id="dashboard-view" class="hidden">
             <header class="bg-gray-800/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
-                <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <div class="container flex justify-between items-center py-4">
                     <h1 class="text-xl font-bold text-white">vLLM Manager</h1>
                     <div>
                         <span id="username-display" class="mr-4"></span>
-                        <button onclick="app.logout()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md text-sm transition duration-300">Logout</button>
+                        <button onclick="app.logout()" class="btn btn-danger text-sm">Logout</button>
                     </div>
                 </div>
             </header>
 
-            <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+            <main class="container p-4">
                 <!-- Stats Grid -->
-                <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8"></div>
+                <div id="stats-grid" class="grid grid-4 mb-8"></div>
 
                 <!-- GPU Info -->
                 <div class="mb-8">
-                    <h2 class="text-2xl font-bold mb-4">GPU Status</h2>
-                    <div id="gpu-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                    <h2 class="text-2xl font-bold mb-4 text-white">GPU Status</h2>
+                    <div id="gpu-list" class="grid grid-3 gap-6"></div>
                 </div>
 
                 <!-- Management Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                    <div id="system-info-card" class="bg-gray-800 p-6 rounded-lg shadow-lg"></div>
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg lg:col-span-2">
-                        <h3 class="text-lg font-semibold mb-4">Pull New Model</h3>
+                <div class="grid grid-2 gap-6 mb-8">
+                    <div id="system-info-card" class="card p-6"></div>
+                    <div class="card p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-white">Pull New Model</h3>
                         <div class="flex space-x-2">
-                            <input id="hf-model-id" placeholder="HuggingFace Model ID (e.g., facebook/opt-125m)" class="flex-grow px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <button onclick="app.pullModel()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Pull</button>
+                            <input id="hf-model-id" placeholder="HuggingFace Model ID (e.g., facebook/opt-125m)" class="input flex-grow">
+                            <button onclick="app.pullModel()" class="btn btn-primary">Pull</button>
                         </div>
                     </div>
                 </div>
@@ -84,8 +326,8 @@
                 <!-- Models List -->
                 <div>
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-2xl font-bold">Managed Models</h2>
-                        <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
+                        <h2 class="text-2xl font-bold text-white">Managed Models</h2>
+                        <button onclick="app.scanModelsFolder()" class="btn btn-primary flex items-center space-x-2 text-sm">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 11h5v5H4v-5zm11-11h5v5h-5V4zm0 11h5v5h-5v-5z" /></svg>
                             <span>Scan Folder</span>
                         </button>
@@ -95,62 +337,63 @@
             </main>
         </div>
 
-        <!-- Modals -->
-        <div id="log-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
-            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-full max-h-[80vh] flex flex-col">
-                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 id="log-modal-title" class="text-lg font-semibold">Logs</h3>
-                    <button onclick="app.hideLogModal()" class="text-gray-400 hover:text-white">&times;</button>
+        <!-- Log Modal -->
+        <div id="log-modal" class="modal-bg hidden">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="log-modal-title" class="text-lg font-semibold text-white">Logs</h3>
+                    <button onclick="app.hideLogModal()" class="close-btn">&times;</button>
                 </div>
-                <pre id="log-pre" class="p-4 flex-grow overflow-y-auto text-sm log-pre bg-gray-900"></pre>
+                <pre id="log-pre" class="log-pre"></pre>
             </div>
         </div>
-        
-        <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
-            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
-                <div class="p-4 border-b border-gray-700">
-                    <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
+
+        <!-- Edit Modal -->
+        <div id="edit-modal" class="modal-bg hidden">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="edit-modal-title" class="text-lg font-semibold text-white">Edit Model Configuration</h3>
                 </div>
-                <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form id="edit-form" class="modal-body grid grid-2 gap-4">
                     <input type="hidden" id="edit-model-id">
-                     <div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-300">GPU IDs</label>
-                        <input type="text" id="edit-gpu-ids" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="text" id="edit-gpu-ids" class="input mt-1">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-300">GPU Memory Utilization</label>
-                        <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="input mt-1">
                     </div>
-                     <div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-300">Tensor Parallel Size</label>
-                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="input mt-1">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-300">Max Model Length</label>
-                        <input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="number" step="256" min="256" id="edit-max-len" class="input mt-1">
                     </div>
-                     <div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-300">Datatype</label>
-                        <input type="text" id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="text" id="edit-dtype" class="input mt-1">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-300">Quantization</label>
-                        <input type="text" placeholder="e.g., awq, gptq (or leave blank)" id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="text" placeholder="e.g., awq, gptq (or leave blank)" id="edit-quantization" class="input mt-1">
                     </div>
-                    <div class="md:col-span-2 flex items-center space-x-4">
-                         <div class="flex items-center">
+                    <div class="grid-span-2 flex items-center space-x-4">
+                        <div class="flex items-center">
                             <input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
                             <label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300">Trust Remote Code</label>
                         </div>
-                         <div class="flex items-center">
+                        <div class="flex items-center">
                             <input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
                             <label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300">Enable Prefix Caching</label>
                         </div>
                     </div>
                 </form>
-                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
-                    <button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
-                    <button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
+                <div class="modal-footer">
+                    <button onclick="app.hideEditModal()" class="btn btn-secondary mr-2">Cancel</button>
+                    <button onclick="app.saveModelConfig()" class="btn btn-primary">Save Changes</button>
                 </div>
             </div>
         </div>
