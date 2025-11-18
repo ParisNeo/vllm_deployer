@@ -677,13 +677,28 @@ async def clear_error_state(
 ):
     """
     Clear any stored error state for a model, regardless of its current status.
+    Also resets the model's download_status back to \"completed\" so the UI no longer
+    treats it as an error after the clear operation.
     """
+    # Remove in‑memory error state and any associated log broadcaster
     if model_id in model_states:
         del model_states[model_id]
     if model_id in log_broadcasters:
         del log_broadcasters[model_id]
+
+    # Reset persistent DB status if it was marked as error
+    db = SessionLocal()
+    try:
+        model = db.query(Model).filter(Model.id == model_id).first()
+        if model and model.download_status == "error":
+            model.download_status = "completed"
+            db.commit()
+    finally:
+        db.close()
+
     # Always return success – even if there was no error recorded.
     return {"success": True}
+
 
 
 @app.get("/api/dashboard/stats", response_model=DashboardStats)
