@@ -624,7 +624,7 @@ async def start_model(
     ]
 
     quant = config.get("quantization")
-    if quant and quant.lower() != "fp8":
+    if quant:
         cmd.extend(["--quantization", quant])
 
     if config.get("trust_remote_code"):
