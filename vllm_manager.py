@@ -13,6 +13,8 @@ import secrets
 import shutil
 import sys
 import collections
+import csv
+import io
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
@@ -135,11 +137,11 @@ class ModelStatus(BaseModel):
     error_message: Optional[str] = None
 
 
-class GPUAssignedModel(BaseModel):
-    """Represents a model that is currently running on a GPU."""
-    id: int
-    name: str
+class GPUProcess(BaseModel):
     pid: int
+    process_name: str
+    gpu_memory_usage: float
+    managed_model_id: Optional[int] = None
 
 
 class GPUInfo(BaseModel):
@@ -149,7 +151,7 @@ class GPUInfo(BaseModel):
     memory_used_mb: int
     utilization_percent: float
     temperature: Optional[float]
-    assigned_models: List[GPUAssignedModel] = []
+    processes: List[GPUProcess] = []
 
 
 class DashboardStats(BaseModel):
@@ -216,7 +218,7 @@ class LogBroadcaster:
 # ========================================================
 # App Setup & Global State
 # ========================================================
-app = FastAPI(title="vLLM Manager Pro", version="3.2.1")
+app = FastAPI(title="vLLM Manager Pro", version="3.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -480,6 +482,53 @@ def find_available_port(start_port: int = 8000) -> int:
     return port
 
 
+def get_gpu_processes_from_nvidia_smi() -> Dict[int, List[dict]]:
+    """Query nvidia-smi for running processes on GPUs."""
+    gpu_map = {}  # uuid -> index
+    processes = collections.defaultdict(list)
+    
+    try:
+        # Map UUID to Index
+        cmd_map = ["nvidia-smi", "--query-gpu=index,uuid", "--format=csv,noheader,nounits"]
+        res_map = subprocess.run(cmd_map, capture_output=True, text=True)
+        if res_map.returncode == 0:
+            reader = csv.reader(io.StringIO(res_map.stdout))
+            for row in reader:
+                if len(row) >= 2:
+                    gpu_map[row[1].strip()] = int(row[0].strip())
+
+        # Get processes: pid, process_name, gpu_uuid, used_memory
+        cmd_apps = ["nvidia-smi", "--query-compute-apps=pid,process_name,gpu_uuid,used_memory", "--format=csv,noheader,nounits"]
+        res_apps = subprocess.run(cmd_apps, capture_output=True, text=True)
+        if res_apps.returncode == 0:
+             reader = csv.reader(io.StringIO(res_apps.stdout))
+             for row in reader:
+                 if len(row) >= 4:
+                     try:
+                         pid = int(row[0].strip())
+                         name = row[1].strip()
+                         uuid = row[2].strip()
+                         mem_str = row[3].strip()
+                         mem = float(mem_str) if mem_str else 0.0
+                         
+                         idx = gpu_map.get(uuid)
+                         if idx is not None:
+                             processes[idx].append({
+                                 "pid": pid,
+                                 "process_name": name,
+                                 "gpu_memory_usage": mem
+                             })
+                     except ValueError:
+                         continue
+    except FileNotFoundError:
+        # nvidia-smi not found (e.g. no driver or wrong path)
+        pass
+    except Exception as e:
+        print(f"Error querying nvidia-smi: {e}")
+        
+    return processes
+
+
 # ========================================================
 # API Endpoints
 # ========================================================
@@ -684,9 +733,7 @@ async def clear_error_state(
     model_id: int, username: str = Depends(get_current_user)
 ):
     """
-    Clear any stored error state for a model, regardless of its current status.
-    Also resets the model's download_status back to "completed" so the UI no longer
-    treats it as an error after the clear operation.
+    Clear any stored error state for a model.
     """
     if model_id in model_states:
         del model_states[model_id]
@@ -720,24 +767,32 @@ async def get_dashboard_stats(
 @app.get("/api/gpus", response_model=List[GPUInfo])
 async def get_gpu_info(username: str = Depends(get_current_user)):
     """
-    Returns GPU information together with the list of models currently assigned
-    to each GPU. Each assigned model entry includes its database ID, name, and
-    the OS PID of the running process.
+    Returns GPU information and list of processes.
+    Combines GPUtil data with nvidia-smi process list.
     """
+    nvidia_processes = get_gpu_processes_from_nvidia_smi()
+    
     try:
         gpu_infos = []
         for g in GPUtil.getGPUs():
-            assigned = []
-            for model_id, info in running_models.items():
-                gpu_id_list = [int(x) for x in info["gpu_ids"].split(",") if x.strip().isdigit()]
-                if g.id in gpu_id_list:
-                    assigned.append(
-                        GPUAssignedModel(
-                            id=model_id,
-                            name=info["name"],
-                            pid=info["pid"],
-                        )
-                    )
+            proc_list = []
+            # Add nvidia-smi detected processes
+            if g.id in nvidia_processes:
+                for p in nvidia_processes[g.id]:
+                    # Check if this PID belongs to a managed model
+                    model_id = None
+                    for mid, info in running_models.items():
+                        if info["pid"] == p["pid"]:
+                            model_id = mid
+                            break
+                    
+                    proc_list.append(GPUProcess(
+                        pid=p["pid"],
+                        process_name=p["process_name"],
+                        gpu_memory_usage=p["gpu_memory_usage"],
+                        managed_model_id=model_id
+                    ))
+            
             gpu_infos.append(
                 GPUInfo(
                     id=g.id,
@@ -746,13 +801,47 @@ async def get_gpu_info(username: str = Depends(get_current_user)):
                     memory_used_mb=int(g.memoryUsed),
                     utilization_percent=float(g.load * 100),
                     temperature=float(g.temperature) if g.temperature else None,
-                    assigned_models=assigned,
+                    processes=proc_list,
                 )
             )
         return gpu_infos
     except Exception as e:
         print(f"Could not get GPU info: {e}")
         return []
+
+
+@app.delete("/api/gpus/kill/{pid}")
+async def kill_gpu_process(pid: int, username: str = Depends(get_current_user)):
+    # Check if it's a managed model first
+    managed_id = None
+    for mid, info in running_models.items():
+        if info["pid"] == pid:
+            managed_id = mid
+            break
+            
+    if managed_id:
+        return await stop_model(managed_id, username)
+
+    # Generic kill for non-managed processes
+    try:
+        os.kill(pid, signal.SIGTERM)
+        # Wait briefly to see if it dies? 
+        # We can't easily check immediately without blocking, but client will refresh.
+        return {"success": True, "message": f"Process {pid} killed."}
+    except PermissionError:
+        # Try sudo
+        if os.name != 'nt':
+            try:
+                subprocess.run(["sudo", "kill", "-9", str(pid)], check=True, capture_output=True)
+                return {"success": True, "message": f"Process {pid} killed via sudo."}
+            except subprocess.CalledProcessError as e:
+                raise HTTPException(status_code=403, detail=f"Permission denied and sudo failed: {e.stderr}")
+        else:
+            raise HTTPException(status_code=403, detail="Permission denied.")
+    except ProcessLookupError:
+        raise HTTPException(status_code=404, detail="Process not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/models/scan")

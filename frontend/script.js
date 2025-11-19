@@ -40,7 +40,10 @@ const app = {
         },
         async del(endpoint) {
             const res = await fetch(endpoint, { method: 'DELETE' });
-            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            if (!res.ok) {
+                const error = await res.json().catch(() => ({ detail: 'Request failed' }));
+                throw new Error(error.detail);
+            }
             return res.json();
         }
     },
@@ -364,16 +367,28 @@ const app = {
             const el = document.getElementById('gpu-list');
             if (!el) return;
             if (!gpus || gpus.length === 0) {
-                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
+                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected or unable to fetch stats.</div>`;
                 return;
             }
             el.innerHTML = gpus.map(gpu => {
-                const assignedModelsHtml = gpu.assigned_models.map(m => `
+                const processListHtml = gpu.processes.map(p => {
+                    const isManaged = p.managed_model_id !== null;
+                    const actionBtn = isManaged 
+                        ? `<button onclick="app.stopModel(${p.managed_model_id})" class="bg-yellow-600 hover:bg-yellow-700 text-xs text-white font-bold py-1 px-2 rounded">Stop (Managed)</button>`
+                        : `<button onclick="app.killGpuProcess(${p.pid})" class="bg-red-600 hover:bg-red-700 text-xs text-white font-bold py-1 px-2 rounded">Kill</button>`;
+                    
+                    return `
                     <div class="flex items-center justify-between bg-gray-700 rounded p-2 mb-1">
-                        <span class="text-sm text-gray-200">${m.name} (PID: ${m.pid})</span>
-                        <button onclick="app.stopModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-xs text-white font-bold py-1 px-2 rounded">Kill</button>
+                        <div class="truncate pr-2">
+                            <span class="text-sm font-mono text-gray-200">${p.process_name}</span>
+                            <span class="text-xs text-gray-400 ml-1">(PID: ${p.pid}, ${p.gpu_memory_usage.toFixed(0)} MB)</span>
+                        </div>
+                        <div class="flex-shrink-0">
+                            ${actionBtn}
+                        </div>
                     </div>
-                `).join('');
+                `}).join('');
+
                 return `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
                     <div class="flex justify-between items-center mb-2">
@@ -391,7 +406,7 @@ const app = {
                     </div>
                     <div class="mt-3">
                         <h5 class="text-xs text-gray-400 mb-1">Running Processes:</h5>
-                        ${assignedModelsHtml || '<div class="text-sm text-gray-300">None</div>'}
+                        ${processListHtml || '<div class="text-sm text-gray-500 italic">No processes detected</div>'}
                     </div>
                 </div>
                 `;
@@ -582,6 +597,18 @@ const app = {
             this.loadDashboard();
         } catch (e) {
             alert('Failed to stop model: ' + e.message);
+        }
+    },
+
+    async killGpuProcess(pid) {
+        if (confirm(`Are you sure you want to KILL process ${pid}? This may be an external process.`)) {
+            try {
+                const res = await this.api.del(`/api/gpus/kill/${pid}`);
+                alert(res.message || 'Process killed.');
+                this.refreshStats();
+            } catch (e) {
+                alert('Failed to kill process: ' + e.message);
+            }
         }
     },
 
