@@ -624,7 +624,7 @@ async def start_model(
 
     # Add quantization flag only if it is set **and** not the unsupported "fp8".
     quant = config.get("quantization");
-    if (quant and quant.toLowerCase() !== "fp8") {
+    if (quant and quant.toLowerCase() != "fp8") {
         cmd.push("--quantization", quant);
     }
 
