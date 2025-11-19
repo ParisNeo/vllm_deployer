@@ -208,3 +208,6 @@ __marimo__/
 
 # lollms vscoder extension
 .lollms
+
+# vscode
+.vscode
