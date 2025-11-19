@@ -46,9 +46,9 @@ const app = {
     },
 
     ui: {
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         // Safely show/hide main views (login vs dashboard)
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         showView(viewId) {
             const idsToHide = ['login-view', 'dashboard-view'];
             idsToHide.forEach(id => {
@@ -59,9 +59,9 @@ const app = {
             if (target) target.classList.remove('hidden');
         },
 
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         // ANSI → HTML conversion (preserves colours in log output)
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         ansiToHtml(text) {
             const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -128,9 +128,9 @@ const app = {
             return result;
         },
 
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         // Log handling – now uses ansiToHtml to keep colours
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         showLogModal(title) {
             const titleEl = document.getElementById('log-modal-title');
             const preEl = document.getElementById('log-pre');
@@ -154,9 +154,9 @@ const app = {
             pre.scrollTop = pre.scrollHeight;
         },
 
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         // Remaining UI helpers (unchanged except for safety checks)
-        // -----------------------------------------------------------------
+        // ------------------------------------------------------------------------
         showEditModal() {
             const modal = document.getElementById('edit-modal');
             if (modal) modal.classList.remove('hidden');
@@ -297,7 +297,14 @@ const app = {
                 el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
                 return;
             }
-            el.innerHTML = gpus.map(gpu => `
+            el.innerHTML = gpus.map(gpu => {
+                const assignedModelsHtml = gpu.assigned_models.map(m => `
+                    <div class="flex items-center justify-between bg-gray-700 rounded p-2 mb-1">
+                        <span class="text-sm text-gray-200">${m.name} (PID: ${m.pid})</span>
+                        <button onclick="app.stopModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-xs text-white font-bold py-1 px-2 rounded">Kill</button>
+                    </div>
+                `).join('');
+                return `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
                     <div class="flex justify-between items-center mb-2">
                         <h4 class="font-semibold">GPU ${gpu.id}: ${gpu.name}</h4>
@@ -312,12 +319,13 @@ const app = {
                             <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${((gpu.memory_used_mb / gpu.memory_total_mb) * 100).toFixed(0)}%"></div>
                         </div>
                     </div>
-                    <div>
-                        <h5 class="text-xs text-gray-400 mb-1">Assigned Models:</h5>
-                        <div class="text-sm">${gpu.assigned_models.length > 0 ? gpu.assigned_models.join(', ') : 'None'}</div>
+                    <div class="mt-3">
+                        <h5 class="text-xs text-gray-400 mb-1">Running Processes:</h5>
+                        ${assignedModelsHtml || '<div class="text-sm text-gray-300">None</div>'}
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
     },
 
