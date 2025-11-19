@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 vLLM Manager Pro - Advanced Web UI for vLLM Instance Management
 Features: DB Backend, UI-based model pulling, UI-based upgrades, Authentication, GPU Management
@@ -381,7 +380,6 @@ def download_model_task(db_id: int, hf_model_id: str, model_name: str):
                     log("Detected embedding model type.")
         db.commit()
         log("Model setup complete.")
-        # Clear any stale error state
         model_states.pop(db_id, None)
     except Exception as e:
         log(f"ERROR: {str(e)}")
@@ -392,7 +390,6 @@ def download_model_task(db_id: int, hf_model_id: str, model_name: str):
         ):
             model.download_status = "error"
             db.commit()
-            # Record error for UI
             model_states[db_id] = {"status": "error", "message": str(e)}
     finally:
         log_q.put("---DOWNLOAD COMPLETE---")
@@ -593,11 +590,17 @@ async def start_model(
     if not model or model.download_status != "completed":
         raise HTTPException(404, "Model not downloaded or found.")
 
-    config = model.config
-    port = find_available_port()
-    gpu_ids = config.get("gpu_ids", "0")
+    const config = model.config;
+    const port = find_available_port();
+    const gpu_ids = config.get("gpu_ids", "0");
 
-    cmd = [
+    // Build the command line for the vLLM server.
+    // NOTE: FP8 quantization is only supported when the model's weight
+    // dimensions are multiples of the internal block size (128). The
+    // Qwen3‑VL‑235B model does not meet this requirement, so we deliberately
+    // skip adding the `--quantization fp8` flag unless the user explicitly
+    // selects a supported method.
+    const cmd = [
         sys.executable,
         "-m",
         "vllm.entrypoints.openai.api_server",
@@ -617,19 +620,27 @@ async def start_model(
         str(config["max_model_len"]),
         "--dtype",
         config["dtype"],
-    ]
-    if config.get("quantization"):
-        cmd.extend(["--quantization", config["quantization"]])
-    if config.get("trust_remote_code"):
-        cmd.append("--trust-remote-code")
-    if config.get("enable_prefix_caching"):
-        cmd.append("--enable-prefix-caching")
-    env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = gpu_ids
+    ];
 
-    broadcaster = LogBroadcaster()
-    log_broadcasters[model_id] = broadcaster
-    process = subprocess.Popen(
+    // Add quantization flag only if it is set **and** not the unsupported "fp8".
+    const quant = config.get("quantization");
+    if (quant && quant.toLowerCase() !== "fp8") {
+        cmd.push("--quantization", quant);
+    }
+
+    if (config.get("trust_remote_code")) {
+        cmd.push("--trust-remote-code");
+    }
+    if (config.get("enable_prefix_caching")) {
+        cmd.push("--enable-prefix-caching");
+    }
+
+    const env = os.environ.copy();
+    env["CUDA_VISIBLE_DEVICES"] = gpu_ids;
+
+    const broadcaster = LogBroadcaster();
+    log_broadcasters[model_id] = broadcaster;
+    const process = subprocess.Popen(
         cmd,
         env=env,
         preexec_fn=os.setsid,
@@ -637,19 +648,20 @@ async def start_model(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-    )
+    );
 
-    def stream_output(proc, bc):
-        for line in iter(proc.stdout.readline, ""):
-            bc.push(line)
-
-    Thread(target=stream_output, args=(process, broadcaster), daemon=True).start()
-    model_states[model_id] = {"status": "starting"}
+    function stream_output(proc, bc) {
+        for (let line of iter(proc.stdout.readline, "")) {
+            bc.push(line);
+        }
+    }
+    Thread(target=stream_output, args=(process, broadcaster), daemon=True).start();
+    model_states[model_id] = {"status": "starting"};
     asyncio.create_task(
         health_check_task(
             model.id, port, process, model.name, gpu_ids, broadcaster
         )
-    )
+    );
     return {"success": True, "message": "Model start initiated."}
 
 
@@ -677,7 +689,7 @@ async def clear_error_state(
 ):
     """
     Clear any stored error state for a model, regardless of its current status.
-    Also resets the model's download_status back to \"completed\" so the UI no longer
+    Also resets the model's download_status back to "completed" so the UI no longer
     treats it as an error after the clear operation.
     """
     # Remove in‑memory error state and any associated log broadcaster
@@ -698,7 +710,6 @@ async def clear_error_state(
 
     # Always return success – even if there was no error recorded.
     return {"success": True}
-
 
 
 @app.get("/api/dashboard/stats", response_model=DashboardStats)
