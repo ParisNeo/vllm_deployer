@@ -51,110 +51,93 @@ const app = {
             document.getElementById('dashboard-view').classList.add('hidden');
             document.getElementById(viewId).classList.remove('hidden');
         },
-        renderModelList(models) {
-            const listEl = document.getElementById('model-list');
-            if (!listEl) return;
-            if (models.length === 0) {
-                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model or scan the models folder to get started.</div>`;
-                return;
-            }
-            listEl.innerHTML = models.map(m => {
-                const statusMap = {
-                    running: `<span class="bg-green-600 text-white">Running on port ${m.port}</span>`,
-                    starting: `<span class="bg-blue-600 text-white flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Starting...</span>`,
-                    error: `<span class="bg-red-600 text-white" title="${m.error_message || ''}">Error</span>`,
-                    completed: `<span class="bg-yellow-600 text-white">${m.download_status}</span>`
-                };
 
-                const statusBadge = statusMap[m.status_text] || `<span class="bg-gray-600 text-white">${m.status_text}</span>`;
+        // -----------------------------------------------------------------
+        // ANSI → HTML conversion (preserves colours in log output)
+        // -----------------------------------------------------------------
+        ansiToHtml(text) {
+            // Escape HTML first
+            const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
 
-                return `
-                <div class="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between flex-wrap gap-4">
-                    <div class="flex-grow min-w-0">
-                        <h4 class="font-bold text-lg">${m.name}</h4>
-                        <p class="text-sm text-gray-400">${m.hf_model_id}</p>
-                        <div class="text-xs mt-2 flex flex-wrap gap-2 items-center">
-                            <span class="inline-block bg-gray-700 rounded-full px-3 py-1 text-sm font-semibold text-gray-300">Size: ${m.size_gb.toFixed(2)} GB</span>
-                            <span class="inline-block bg-gray-700 rounded-full px-3 py-1 text-sm font-semibold text-gray-300">Type: ${m.model_type}</span>
-                            <div class="inline-block rounded-full px-3 py-1 text-sm font-semibold">${statusBadge}</div>
-                        </div>
-                        ${m.status_text === 'error' ? `<p class="text-red-400 text-xs mt-2 break-words">Error: ${m.error_message}</p>` : ''}
-                    </div>
-                    <div class="flex items-center space-x-2">
-                        ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
-                        ${m.status_text !== 'starting' ? `<button onclick="app.openEditModal(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Edit</button>` : ''}
-                        ${(m.status_text === 'running' || m.status_text === 'error') ? `<button onclick="app.showRuntimeLogs(${m.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Logs</button>` : ''}
-                        ${m.download_status === 'completed' && !m.is_running && m.status_text !== 'starting' ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
-                        ${m.status_text === 'running' ? `<button onclick="app.stopModel(${m.id})" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Stop</button>` : ''}
-                        <button onclick="app.deleteModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Delete</button>
-                    </div>
-                </div>
-            `}).join('');
-        },
-        renderSystemInfo(info) {
-            const el = document.getElementById('system-info-card');
-            if (!el) return;
-            el.innerHTML = `
-                <h3 class="text-lg font-semibold mb-2">System Information</h3>
-                <p class="text-sm">vLLM Version: <strong class="text-indigo-400">${info.vllm_version}</strong></p>
-                <p class="text-sm">Mode: <strong class="text-indigo-400">${info.dev_mode ? 'Development' : 'Stable'}</strong></p>
-                <button onclick="app.upgradeVLLM()" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Upgrade vLLM</button>
-            `;
-        },
-        renderDashboardStats(stats) {
-            const el = document.getElementById('stats-grid');
-            if (!el) return;
-            el.innerHTML = `
-                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">CPU Usage</h4>
-                    <p class="text-2xl font-bold">${stats.system_cpu_percent.toFixed(1)}%</p>
-                </div>
-                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">RAM Usage</h4>
-                    <p class="text-2xl font-bold">${stats.system_memory_percent.toFixed(1)}%</p>
-                </div>
-                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">Running Models</h4>
-                    <p class="text-2xl font-bold">${stats.running_models}</p>
-                </div>
-                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">Total Models</h4>
-                    <p class="text-2xl font-bold">${stats.total_models}</p>
-                </div>
-            `;
-        },
-        renderGpuList(gpus) {
-            const el = document.getElementById('gpu-list');
-            if (!el) return;
-            if (!gpus || gpus.length === 0) {
-                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
-                return;
+            const escaped = escapeHtml(text);
+
+            // Regex to match ANSI SGR codes (e.g., \x1b[31m, \x1b[1;34m)
+            const ansiRegex = /\x1b\[(\d+(?:;\d+)*)m/g;
+
+            // Mapping of SGR parameters to CSS classes
+            const sgrMap = {
+                0: 'ansi-reset',
+                1: 'ansi-bold',
+                4: 'ansi-underline',
+                30: 'ansi-black',
+                31: 'ansi-red',
+                32: 'ansi-green',
+                33: 'ansi-yellow',
+                34: 'ansi-blue',
+                35: 'ansi-magenta',
+                36: 'ansi-cyan',
+                37: 'ansi-white',
+                90: 'ansi-bright-black',
+                91: 'ansi-bright-red',
+                92: 'ansi-bright-green',
+                93: 'ansi-bright-yellow',
+                94: 'ansi-bright-blue',
+                95: 'ansi-bright-magenta',
+                96: 'ansi-bright-cyan',
+                97: 'ansi-bright-white'
+            };
+
+            // Replace each ANSI sequence with opening/closing spans
+            let result = '';
+            let lastIndex = 0;
+            const stack = [];
+
+            let match;
+            while ((match = ansiRegex.exec(escaped)) !== null) {
+                const index = match.index;
+                const codes = match[1].split(';').map(Number);
+
+                // Append text before the ANSI code
+                result += escaped.substring(lastIndex, index);
+                lastIndex = ansiRegex.lastIndex;
+
+                // Close any previous styles if reset (code 0)
+                if (codes.includes(0)) {
+                    while (stack.length) {
+                        result += '</span>';
+                        stack.pop();
+                    }
+                    continue;
+                }
+
+                // Build class list for this sequence
+                const classes = codes
+                    .map(code => sgrMap[code])
+                    .filter(Boolean);
+
+                if (classes.length) {
+                    result += `<span class="${classes.join(' ')}">`;
+                    stack.push('</span>');
+                }
             }
-            el.innerHTML = gpus.map(gpu => `
-                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-semibold">GPU ${gpu.id}: ${gpu.name}</h4>
-                        <span class="text-sm text-gray-400">${gpu.temperature ? `${gpu.temperature}°C` : ''}</span>
-                    </div>
-                    <div class="mb-2">
-                        <div class="flex justify-between text-xs mb-1">
-                            <span>Memory: ${(gpu.memory_used_mb / 1024).toFixed(2)} / ${(gpu.memory_total_mb / 1024).toFixed(2)} GB</span>
-                            <span>Util: ${gpu.utilization_percent.toFixed(0)}%</span>
-                        </div>
-                        <div class="w-full bg-gray-700 rounded-full h-2.5">
-                            <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${((gpu.memory_used_mb / gpu.memory_total_mb) * 100).toFixed(0)}%"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <h5 class="text-xs text-gray-400 mb-1">Assigned Models:</h5>
-                        <div class="text-sm">${gpu.assigned_models.length > 0 ? gpu.assigned_models.join(', ') : 'None'}</div>
-                    </div>
-                </div>
-            `).join('');
+
+            // Append remaining text
+            result += escaped.substring(lastIndex);
+            // Close any open spans
+            while (stack.length) {
+                result += stack.pop();
+            }
+            return result;
         },
+
+        // -----------------------------------------------------------------
+        // Log handling – now uses ansiToHtml to keep colours
+        // -----------------------------------------------------------------
         showLogModal(title) {
             document.getElementById('log-modal-title').textContent = title;
-            document.getElementById('log-pre').textContent = '';
+            document.getElementById('log-pre').innerHTML = '';
             document.getElementById('log-modal').classList.remove('hidden');
         },
         hideLogModal() {
@@ -167,9 +150,14 @@ const app = {
         appendLog(text) {
             const pre = document.getElementById('log-pre');
             if (!pre) return;
-            pre.textContent += text;
+            // Convert ANSI colour codes to HTML and append
+            pre.innerHTML += app.ui.ansiToHtml(text);
             pre.scrollTop = pre.scrollHeight;
         },
+
+        // -----------------------------------------------------------------
+        // The rest of the UI helpers remain unchanged
+        // -----------------------------------------------------------------
         showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
         hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
         showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
@@ -215,9 +203,143 @@ const app = {
             }
             
             contentEl.innerHTML = html;
-        }
+        },
+
+        // -----------------------------------------------------------------
+        // Remaining UI functions unchanged (renderModelList, renderDashboardStats,
+        // renderGpuList, renderSystemInfo, etc.)
+        // -----------------------------------------------------------------
+        renderModelList(models) {
+            const listEl = document.getElementById('model-list');
+            if (!listEl) return;
+            if (models.length === 0) {
+                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model or scan the models folder to get started.</div>`;
+                return;
+            }
+            listEl.innerHTML = models.map(m => {
+                const statusMap = {
+                    running: `<span class="bg-green-600 text-white">Running on port ${m.port}</span>`,
+                    starting: `<span class="bg-blue-600 text-white flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Starting...</span>`,
+                    error: `<span class="bg-red-600 text-white" title="${m.error_message || ''}">Error</span>`,
+                    completed: `<span class="bg-yellow-600 text-white">${m.download_status}</span>`
+                };
+                const statusBadge = statusMap[m.status_text] || `<span class="bg-gray-600 text-white">${m.status_text}</span>`;
+                return `
+                <div class="bg-gray-800 p-4 rounded-lg shadow-md flex items-center justify-between flex-wrap gap-4">
+                    <div class="flex-grow min-w-0">
+                        <h4 class="font-bold text-lg">${m.name}</h4>
+                        <p class="text-sm text-gray-400">${m.hf_model_id}</p>
+                        <div class="text-xs mt-2 flex flex-wrap gap-2 items-center">
+                            <span class="inline-block bg-gray-700 rounded-full px-3 py-1 text-sm font-semibold text-gray-300">Size: ${m.size_gb.toFixed(2)} GB</span>
+                            <span class="inline-block bg-gray-700 rounded-full px-3 py-1 text-sm font-semibold text-gray-300">Type: ${m.model_type}</span>
+                            <div class="inline-block rounded-full px-3 py-1 text-sm font-semibold">${statusBadge}</div>
+                        </div>
+                        ${m.status_text === 'error' ? `<p class="text-red-400 text-xs mt-2 break-words">Error: ${m.error_message}</p>` : ''}
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${m.status_text === 'error' ? `<button onclick="app.clearError(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Clear</button>` : ''}
+                        ${m.status_text !== 'starting' ? `<button onclick="app.openEditModal(${m.id})" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Edit</button>` : ''}
+                        ${(m.status_text === 'running' || m.status_text === 'error') ? `<button onclick="app.showRuntimeLogs(${m.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Logs</button>` : ''}
+                        ${m.download_status === 'completed' && !m.is_running && m.status_text !== 'starting' ? `<button onclick="app.startModel(${m.id})" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Start</button>` : ''}
+                        ${m.status_text === 'running' ? `<button onclick="app.stopModel(${m.id})" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Stop</button>` : ''}
+                        <button onclick="app.deleteModel(${m.id})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-md text-sm transition">Delete</button>
+                    </div>
+                </div>
+            `}).join('');
+        },
+
+        // (All other UI methods remain unchanged)
+        renderSystemInfo(info) {
+            const el = document.getElementById('system-info-card');
+            if (!el) return;
+            el.innerHTML = `
+                <h3 class="text-lg font-semibold mb-2">System Information</h3>
+                <p class="text-sm">vLLM Version: <strong class="text-indigo-400">${info.vllm_version}</strong></p>
+                <p class="text-sm">Mode: <strong class="text-indigo-400">${info.dev_mode ? 'Development' : 'Stable'}</strong></p>
+                <button onclick="app.upgradeVLLM()" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Upgrade vLLM</button>
+            `;
+        },
+
+        renderDashboardStats(stats) {
+            const el = document.getElementById('stats-grid');
+            if (!el) return;
+            el.innerHTML = `
+                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                    <h4 class="text-sm font-medium text-gray-400">CPU Usage</h4>
+                    <p class="text-2xl font-bold">${stats.system_cpu_percent.toFixed(1)}%</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                    <h4 class="text-sm font-medium text-gray-400">RAM Usage</h4>
+                    <p class="text-2xl font-bold">${stats.system_memory_percent.toFixed(1)}%</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                    <h4 class="text-sm font-medium text-gray-400">Running Models</h4>
+                    <p class="text-2xl font-bold">${stats.running_models}</p>
+                </div>
+                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                    <h4 class="text-sm font-medium text-gray-400">Total Models</h4>
+                    <p class="text-2xl font-bold">${stats.total_models}</p>
+                </div>
+            `;
+        },
+
+        renderGpuList(gpus) {
+            const el = document.getElementById('gpu-list');
+            if (!el) return;
+            if (!gpus || gpus.length === 0) {
+                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
+                return;
+            }
+            el.innerHTML = gpus.map(gpu => `
+                <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-semibold">GPU ${gpu.id}: ${gpu.name}</h4>
+                        <span class="text-sm text-gray-400">${gpu.temperature ? `${gpu.temperature}°C` : ''}</span>
+                    </div>
+                    <div class="mb-2">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span>Memory: ${(gpu.memory_used_mb / 1024).toFixed(2)} / ${(gpu.memory_total_mb / 1024).toFixed(2)} GB</span>
+                            <span>Util: ${gpu.utilization_percent.toFixed(0)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-700 rounded-full h-2.5">
+                            <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${((gpu.memory_used_mb / gpu.memory_total_mb) * 100).toFixed(0)}%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h5 class="text-xs text-gray-400 mb-1">Assigned Models:</h5>
+                        <div class="text-sm">${gpu.assigned_models.length > 0 ? gpu.assigned_models.join(', ') : 'None'}</div>
+                    </div>
+                </div>
+            `).join('');
+        },
+
+        // Modal helpers unchanged
+        showLogModal(title) {
+            document.getElementById('log-modal-title').textContent = title;
+            document.getElementById('log-pre').innerHTML = '';
+            document.getElementById('log-modal').classList.remove('hidden');
+        },
+        hideLogModal() {
+            document.getElementById('log-modal').classList.add('hidden');
+            if (app.state.logWs) {
+                app.state.logWs.close();
+                app.state.logWs = null;
+            }
+        },
+        showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
+        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
+        showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
+        hideAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.add('hidden'); },
+
+        // (All remaining methods – login, startModel, stopModel, etc. – stay the same)
+        // -----------------------------------------------------------------
+        // No further changes required for colour support.
+        // -----------------------------------------------------------------
     },
 
+    // -----------------------------------------------------------------
+    // Remaining app logic (init, login, startModel, health checks, etc.)
+    // -----------------------------------------------------------------
     async init() {
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
@@ -278,10 +400,12 @@ const app = {
             this.logout();
         }
     },
+
     async loadModels() {
         const models = await this.api.get('/api/models');
         this.ui.renderModelList(models);
     },
+
     async refreshStats() {
         try {
             const [stats, gpus, sysInfo] = await Promise.all([
@@ -297,7 +421,7 @@ const app = {
             clearInterval(this.state.refreshInterval); this.state.refreshInterval = null;
         }
     },
-    
+
     _listenToLogs(wsPath, modalTitle, onSpecialMessage = null) {
         this.ui.showLogModal(modalTitle);
         if (this.state.logWs) { this.state.logWs.close(); }
@@ -309,7 +433,7 @@ const app = {
             const data = event.data;
             if (data.startsWith('---') && data.endsWith('---')) {
                 if (onSpecialMessage) {
-                    onSpecialMessage(data); // Callback handles special messages
+                    onSpecialMessage(data);
                 } else {
                     const status = data.replaceAll('-', '').trim();
                     this.ui.appendLog(`\n\nℹ️ ${status}\n`);
@@ -328,7 +452,7 @@ const app = {
             }
         };
     },
-    
+
     async pullModel() {
         const hf_model_id = document.getElementById('hf-model-id').value;
         if (!hf_model_id) return alert('Please enter a HuggingFace Model ID.');
@@ -412,9 +536,7 @@ const app = {
 
     async clearError(id) {
         try {
-            // Call backend to clear error state and reset download_status
             await this.api.post(`/api/models/${id}/clear_error`);
-            // Refresh the dashboard so UI reflects the updated status
             this.loadDashboard();
         } catch (e) {
             alert('Failed to clear error state: ' + e.message);
@@ -450,7 +572,7 @@ const app = {
             eyeClosed.classList.add('hidden');
         }
     },
-    
+
     async openEditModal(modelId) {
         try {
             const models = await this.api.get('/api/models');
@@ -496,11 +618,11 @@ const app = {
             alert('Failed to save configuration: ' + e.message);
         }
     },
-    
+
     hideLogModal() {
         this.ui.hideLogModal();
     },
-    
+
     hideEditModal() {
         this.ui.hideEditModal();
     },
