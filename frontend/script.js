@@ -46,9 +46,9 @@ const app = {
     },
 
     ui: {
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         // Safely show/hide main views (login vs dashboard)
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         showView(viewId) {
             const idsToHide = ['login-view', 'dashboard-view'];
             idsToHide.forEach(id => {
@@ -59,9 +59,9 @@ const app = {
             if (target) target.classList.remove('hidden');
         },
 
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         // ANSI → HTML conversion (preserves colours in log output)
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         ansiToHtml(text) {
             const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -128,9 +128,9 @@ const app = {
             return result;
         },
 
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         // Log handling – now uses ansiToHtml to keep colours
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         showLogModal(title) {
             const titleEl = document.getElementById('log-modal-title');
             const preEl = document.getElementById('log-pre');
@@ -154,9 +154,79 @@ const app = {
             pre.scrollTop = pre.scrollHeight;
         },
 
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
+        // Additional log utilities (copy & save)
+        // ----------------------------------------
+        copyLog() {
+            const pre = document.getElementById('log-pre');
+            if (!pre) return;
+            const text = pre.innerText;
+            if (!navigator.clipboard) {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed'; // avoid scrolling to bottom
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        alert('Log copied to clipboard.');
+                    } else {
+                        alert('Copy command failed. Please select the text manually.');
+                    }
+                } catch (err) {
+                    alert('Copy failed. Please select the text manually.');
+                }
+                document.body.removeChild(textarea);
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Log copied to clipboard.');
+            }).catch(() => {
+                // Clipboard API failed – fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        alert('Log copied to clipboard (fallback).');
+                    } else {
+                        alert('Copy failed. Please select the text manually.');
+                    }
+                } catch (err) {
+                    alert('Copy failed. Please select the text manually.');
+                }
+                document.body.removeChild(textarea);
+            });
+        },
+
+        saveLog() {
+            const pre = document.getElementById('log-pre');
+            if (!pre) return;
+            const text = pre.innerText;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            a.download = `vllm-log-${timestamp}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
+        },
+
+        // ----------------------------------------
         // Remaining UI helpers (unchanged except for safety checks)
-        // ------------------------------------------------------------------------
+        // ----------------------------------------
         showEditModal() {
             const modal = document.getElementById('edit-modal');
             if (modal) modal.classList.remove('hidden');
@@ -329,9 +399,9 @@ const app = {
         }
     },
 
-    // -----------------------------------------------------------------
+    // ------------------------------------------
     // Remaining app logic (init, login, startModel, etc.)
-    // -----------------------------------------------------------------
+    // ------------------------------------------
     async init() {
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
