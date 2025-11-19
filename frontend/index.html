@@ -39,7 +39,146 @@
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200">
-    <!-- (rest of the HTML unchanged) -->
+
+    <!-- Main Container -->
+    <div id="app" class="min-h-screen">
+        
+        <!-- Login View -->
+        <div id="login-view" class="flex items-center justify-center min-h-screen">
+            <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
+                <h2 class="text-2xl font-bold text-center text-white mb-6">vLLM Manager Login</h2>
+                <form id="login-form" class="space-y-4">
+                    <input id="username" type="text" placeholder="Username" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="username">
+                    <div class="relative">
+                        <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="current-password">
+                        <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-200">
+                            <svg id="eye-open-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.02 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+                            </svg>
+                             <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zM10 12a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
+                                <path d="M2 4.272l2.272 2.272A9.959 9.959 0 0010.001 3c4.478 0 8.268 2.943 9.542 7 .274.855.458 1.742.458 2.641 0 1.164-.223 2.277-.635 3.286l-2.42-2.42A4.002 4.002 0 0010 10a4 4 0 00-3.232 1.57l-1.12-1.122a2.001 2.001 0 013.163-2.13zM1.458 10C2.732 14.057 6.522 17 10 17a9.95 9.95 0 005.137-1.432l-2.072-2.072a4 4 0 01-5.59-5.59l-2.45-2.45A10.005 10.005 0 001.458 10z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Login</button>
+                    <p id="login-error" class="text-red-400 text-sm text-center hidden"></p>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="hidden">
+            <header class="bg-gray-800/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
+                <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                    <h1 class="text-xl font-bold text-white">vLLM Manager</h1>
+                    <div>
+                        <span id="username-display" class="mr-4"></span>
+                        <button onclick="app.logout()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md text-sm transition duration-300">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+                <!-- Stats Grid -->
+                <div id="stats-grid" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8"></div>
+
+                <!-- GPU Info -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold mb-4">GPU Status</h2>
+                    <div id="gpu-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                </div>
+
+                <!-- Management Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div id="system-info-card" class="bg-gray-800 p-6 rounded-lg shadow-lg"></div>
+                    <div class="bg-gray-800 p-6 rounded-lg shadow-lg lg:col-span-2">
+                        <h3 class="text-lg font-semibold mb-4">Pull New Model</h3>
+                        <div class="flex space-x-2">
+                            <input id="hf-model-id" placeholder="HuggingFace Model ID (e.g., facebook/opt-125m)" class="flex-grow px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <button onclick="app.pullModel()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Pull</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Models List -->
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Managed Models</h2>
+                        <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 11h5v5H4v-5zm11-11h5v5h-5V4zm0 11h5v5h-5v-5z" /></svg>
+                            <span>Scan Folder</span>
+                        </button>
+                    </div>
+                    <div id="model-list" class="space-y-4"></div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Modals -->
+        <div id="log-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-full max-h-[80vh] flex flex-col">
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                    <h3 id="log-modal-title" class="text-lg font-semibold">Logs</h3>
+                    <button onclick="app.hideLogModal()" class="text-gray-400 hover:text-white">&times;</button>
+                </div>
+                <pre id="log-pre" class="p-4 flex-grow overflow-y-auto text-sm log-pre bg-gray-900"></pre>
+            </div>
+        </div>
+        
+        <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl">
+                <div class="p-4 border-b border-gray-700">
+                    <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
+                </div>
+                <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="hidden" id="edit-model-id">
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">GPU IDs</label>
+                        <input type="text" id="edit-gpu-ids" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">GPU Memory Utilization</label>
+                        <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">Tensor Parallel Size</label>
+                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Max Model Length</label>
+                        <input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300">Datatype</label>
+                        <input type="text" id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300">Quantization</label>
+                        <input type="text" placeholder="e.g., awq, gptq (or leave blank)" id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                    </div>
+                    <div class="md:col-span-2 flex items-center space-x-4">
+                         <div class="flex items-center">
+                            <input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
+                            <label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300">Trust Remote Code</label>
+                        </div>
+                         <div class="flex items-center">
+                            <input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
+                            <label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300">Enable Prefix Caching</label>
+                        </div>
+                    </div>
+                </form>
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
+                    <button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
+                    <button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>
+
