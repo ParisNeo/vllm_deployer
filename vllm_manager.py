@@ -623,23 +623,22 @@ async def start_model(
     ];
 
     # Add quantization flag only if it is set **and** not the unsupported "fp8".
-    quant = config.get("quantization");
-    if (quant and quant.toLowerCase() != "fp8") {
-        cmd.push("--quantization", quant);
-    }
+    quant = config.get("quantization")
+    if (quant and quant.toLowerCase() != "fp8"):
+        cmd.push("--quantization", quant)
 
-    if (config.get("trust_remote_code")) {
-        cmd.push("--trust-remote-code");
-    }
-    if (config.get("enable_prefix_caching")) {
-        cmd.push("--enable-prefix-caching");
-    }
+    if (config.get("trust_remote_code")):
+        cmd.push("--trust-remote-code")
+    
+    if (config.get("enable_prefix_caching")):
+        cmd.push("--enable-prefix-caching")
+    
 
-    env = os.environ.copy();
-    env["CUDA_VISIBLE_DEVICES"] = gpu_ids;
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = gpu_ids
 
-    broadcaster = LogBroadcaster();
-    log_broadcasters[model_id] = broadcaster;
+    broadcaster = LogBroadcaster()
+    log_broadcasters[model_id] = broadcaster
     process = subprocess.Popen(
         cmd,
         env=env,
@@ -650,18 +649,17 @@ async def start_model(
         bufsize=1,
     );
 
-    function stream_output(proc, bc) {
-        for (let line of iter(proc.stdout.readline, "")) {
-            bc.push(line);
-        }
-    }
-    Thread(target=stream_output, args=(process, broadcaster), daemon=True).start();
-    model_states[model_id] = {"status": "starting"};
+    def stream_output(proc, bc):
+        for line in iter(proc.stdout.readline, ""):
+            bc.push(line)
+
+    Thread(target=stream_output, args=(process, broadcaster), daemon=True).start()
+    model_states[model_id] = {"status": "starting"}
     asyncio.create_task(
         health_check_task(
             model.id, port, process, model.name, gpu_ids, broadcaster
         )
-    );
+    )
     return {"success": True, "message": "Model start initiated."}
 
 
