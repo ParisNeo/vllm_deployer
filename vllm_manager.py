@@ -594,12 +594,12 @@ async def start_model(
     const port = find_available_port();
     const gpu_ids = config.get("gpu_ids", "0");
 
-    // Build the command line for the vLLM server.
-    // NOTE: FP8 quantization is only supported when the model's weight
-    // dimensions are multiples of the internal block size (128). The
-    // Qwen3‑VL‑235B model does not meet this requirement, so we deliberately
-    // skip adding the `--quantization fp8` flag unless the user explicitly
-    // selects a supported method.
+    # Build the command line for the vLLM server.
+    # NOTE: FP8 quantization is only supported when the model's weight
+    # dimensions are multiples of the internal block size (128). The
+    # Qwen3‑VL‑235B model does not meet this requirement, so we deliberately
+    # skip adding the `--quantization fp8` flag unless the user explicitly
+    # selects a supported method.
     const cmd = [
         sys.executable,
         "-m",
@@ -622,7 +622,7 @@ async def start_model(
         config["dtype"],
     ];
 
-    // Add quantization flag only if it is set **and** not the unsupported "fp8".
+    # Add quantization flag only if it is set **and** not the unsupported "fp8".
     const quant = config.get("quantization");
     if (quant && quant.toLowerCase() !== "fp8") {
         cmd.push("--quantization", quant);
