@@ -46,27 +46,30 @@ const app = {
     },
 
     ui: {
+        // -----------------------------------------------------------------
+        // Safely show/hide main views (login vs dashboard)
+        // -----------------------------------------------------------------
         showView(viewId) {
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('dashboard-view').classList.add('hidden');
-            document.getElementById(viewId).classList.remove('hidden');
+            const idsToHide = ['login-view', 'dashboard-view'];
+            idsToHide.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(viewId);
+            if (target) target.classList.remove('hidden');
         },
 
         // -----------------------------------------------------------------
         // ANSI → HTML conversion (preserves colours in log output)
         // -----------------------------------------------------------------
         ansiToHtml(text) {
-            // Escape HTML first
             const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[c]);
 
             const escaped = escapeHtml(text);
-
-            // Regex to match ANSI SGR codes (e.g., \x1b[31m, \x1b[1;34m)
             const ansiRegex = /\x1b\[(\d+(?:;\d+)*)m/g;
 
-            // Mapping of SGR parameters to CSS classes
             const sgrMap = {
                 0: 'ansi-reset',
                 1: 'ansi-bold',
@@ -89,7 +92,6 @@ const app = {
                 97: 'ansi-bright-white'
             };
 
-            // Replace each ANSI sequence with opening/closing spans
             let result = '';
             let lastIndex = 0;
             const stack = [];
@@ -99,11 +101,9 @@ const app = {
                 const index = match.index;
                 const codes = match[1].split(';').map(Number);
 
-                // Append text before the ANSI code
                 result += escaped.substring(lastIndex, index);
                 lastIndex = ansiRegex.lastIndex;
 
-                // Close any previous styles if reset (code 0)
                 if (codes.includes(0)) {
                     while (stack.length) {
                         result += '</span>';
@@ -112,7 +112,6 @@ const app = {
                     continue;
                 }
 
-                // Build class list for this sequence
                 const classes = codes
                     .map(code => sgrMap[code])
                     .filter(Boolean);
@@ -123,12 +122,9 @@ const app = {
                 }
             }
 
-            // Append remaining text
             result += escaped.substring(lastIndex);
-            // Close any open spans
-            while (stack.length) {
-                result += stack.pop();
-            }
+            while (stack.length) result += stack.pop();
+
             return result;
         },
 
@@ -136,12 +132,16 @@ const app = {
         // Log handling – now uses ansiToHtml to keep colours
         // -----------------------------------------------------------------
         showLogModal(title) {
-            document.getElementById('log-modal-title').textContent = title;
-            document.getElementById('log-pre').innerHTML = '';
-            document.getElementById('log-modal').classList.remove('hidden');
+            const titleEl = document.getElementById('log-modal-title');
+            const preEl = document.getElementById('log-pre');
+            if (titleEl) titleEl.textContent = title;
+            if (preEl) preEl.innerHTML = '';
+            const modal = document.getElementById('log-modal');
+            if (modal) modal.classList.remove('hidden');
         },
         hideLogModal() {
-            document.getElementById('log-modal').classList.add('hidden');
+            const modal = document.getElementById('log-modal');
+            if (modal) modal.classList.add('hidden');
             if (app.state.logWs) {
                 app.state.logWs.close();
                 app.state.logWs = null;
@@ -150,25 +150,37 @@ const app = {
         appendLog(text) {
             const pre = document.getElementById('log-pre');
             if (!pre) return;
-            // Convert ANSI colour codes to HTML and append
             pre.innerHTML += app.ui.ansiToHtml(text);
             pre.scrollTop = pre.scrollHeight;
         },
 
         // -----------------------------------------------------------------
-        // The rest of the UI helpers remain unchanged
+        // Remaining UI helpers (unchanged except for safety checks)
         // -----------------------------------------------------------------
-        showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
-        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
-        showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
-        hideAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.add('hidden'); },
+        showEditModal() {
+            const modal = document.getElementById('edit-modal');
+            if (modal) modal.classList.remove('hidden');
+        },
+        hideEditModal() {
+            const modal = document.getElementById('edit-modal');
+            if (modal) modal.classList.add('hidden');
+        },
+        showAdminSettingsModal() {
+            const modal = document.getElementById('admin-settings-modal');
+            if (modal) modal.classList.remove('hidden');
+        },
+        hideAdminSettingsModal() {
+            const modal = document.getElementById('admin-settings-modal');
+            if (modal) modal.classList.add('hidden');
+        },
+
         renderAdminSettings(settings) {
             const contentEl = document.getElementById('admin-settings-content');
             const saveBtn = document.getElementById('save-admin-settings-btn');
             if (!contentEl || !saveBtn) return;
-            
+
             let html = `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
-            
+
             if (settings.is_password_env_managed) {
                 html += `<div class="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded relative" role="alert">
                             <strong class="font-bold">Notice:</strong>
@@ -177,7 +189,7 @@ const app = {
                 saveBtn.disabled = true;
                 saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
             } else {
-                if(settings.is_using_default_password) {
+                if (settings.is_using_default_password) {
                     html += `<div class="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded relative mb-4" role="alert">
                                 <strong class="font-bold">Security Alert:</strong>
                                 <span class="block sm:inline"> You are using the default password. Please change it immediately.</span>
@@ -201,14 +213,10 @@ const app = {
                 saveBtn.disabled = false;
                 saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
-            
+
             contentEl.innerHTML = html;
         },
 
-        // -----------------------------------------------------------------
-        // Remaining UI functions unchanged (renderModelList, renderDashboardStats,
-        // renderGpuList, renderSystemInfo, etc.)
-        // -----------------------------------------------------------------
         renderModelList(models) {
             const listEl = document.getElementById('model-list');
             if (!listEl) return;
@@ -248,7 +256,6 @@ const app = {
             `}).join('');
         },
 
-        // (All other UI methods remain unchanged)
         renderSystemInfo(info) {
             const el = document.getElementById('system-info-card');
             if (!el) return;
@@ -311,34 +318,11 @@ const app = {
                     </div>
                 </div>
             `).join('');
-        },
-
-        // Modal helpers unchanged
-        showLogModal(title) {
-            document.getElementById('log-modal-title').textContent = title;
-            document.getElementById('log-pre').innerHTML = '';
-            document.getElementById('log-modal').classList.remove('hidden');
-        },
-        hideLogModal() {
-            document.getElementById('log-modal').classList.add('hidden');
-            if (app.state.logWs) {
-                app.state.logWs.close();
-                app.state.logWs = null;
-            }
-        },
-        showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
-        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
-        showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
-        hideAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.add('hidden'); },
-
-        // (All remaining methods – login, startModel, stopModel, etc. – stay the same)
-        // -----------------------------------------------------------------
-        // No further changes required for colour support.
-        // -----------------------------------------------------------------
+        }
     },
 
     // -----------------------------------------------------------------
-    // Remaining app logic (init, login, startModel, health checks, etc.)
+    // Remaining app logic (init, login, startModel, etc.)
     // -----------------------------------------------------------------
     async init() {
         const loginForm = document.getElementById('login-form');
