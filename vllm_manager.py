@@ -14,7 +14,7 @@ import shutil
 import sys
 import collections
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from threading import Thread
 import queue
@@ -135,6 +135,13 @@ class ModelStatus(BaseModel):
     error_message: Optional[str] = None
 
 
+class GPUAssignedModel(BaseModel):
+    """Represents a model that is currently running on a GPU."""
+    id: int
+    name: str
+    pid: int
+
+
 class GPUInfo(BaseModel):
     id: int
     name: str
@@ -142,7 +149,7 @@ class GPUInfo(BaseModel):
     memory_used_mb: int
     utilization_percent: float
     temperature: Optional[float]
-    assigned_models: List[str]
+    assigned_models: List[GPUAssignedModel] = []
 
 
 class DashboardStats(BaseModel):
@@ -590,16 +597,10 @@ async def start_model(
     if not model or model.download_status != "completed":
         raise HTTPException(404, "Model not downloaded or found.")
 
-    config = model.config;
-    port = find_available_port();
-    gpu_ids = config.get("gpu_ids", "0");
+    config = model.config
+    port = find_available_port()
+    gpu_ids = config.get("gpu_ids", "0")
 
-    # Build the command line for the vLLM server.
-    # NOTE: FP8 quantization is only supported when the model's weight
-    # dimensions are multiples of the internal block size (128). The
-    # Qwen3‑VL‑235B model does not meet this requirement, so we deliberately
-    # skip adding the `--quantization fp8` flag unless the user explicitly
-    # selects a supported method.
     cmd = [
         sys.executable,
         "-m",
@@ -620,19 +621,16 @@ async def start_model(
         str(config["max_model_len"]),
         "--dtype",
         config["dtype"],
-    ];
+    ]
 
-    # Add quantization flag only if it is set **and** not the unsupported "fp8".
     quant = config.get("quantization")
-    if (quant and quant.toLowerCase() != "fp8"):
-        cmd.push("--quantization", quant)
+    if quant and quant.lower() != "fp8":
+        cmd.extend(["--quantization", quant])
 
-    if (config.get("trust_remote_code")):
-        cmd.push("--trust-remote-code")
-    
-    if (config.get("enable_prefix_caching")):
-        cmd.push("--enable-prefix-caching")
-    
+    if config.get("trust_remote_code"):
+        cmd.append("--trust-remote-code")
+    if config.get("enable_prefix_caching"):
+        cmd.append("--enable-prefix-caching")
 
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = gpu_ids
@@ -647,7 +645,7 @@ async def start_model(
         stderr=subprocess.STDOUT,
         text=True,
         bufsize=1,
-    );
+    )
 
     def stream_output(proc, bc):
         for line in iter(proc.stdout.readline, ""):
@@ -690,13 +688,11 @@ async def clear_error_state(
     Also resets the model's download_status back to "completed" so the UI no longer
     treats it as an error after the clear operation.
     """
-    # Remove in‑memory error state and any associated log broadcaster
     if model_id in model_states:
         del model_states[model_id]
     if model_id in log_broadcasters:
         del log_broadcasters[model_id]
 
-    # Reset persistent DB status if it was marked as error
     db = SessionLocal()
     try:
         model = db.query(Model).filter(Model.id == model_id).first()
@@ -706,7 +702,6 @@ async def clear_error_state(
     finally:
         db.close()
 
-    # Always return success – even if there was no error recorded.
     return {"success": True}
 
 
@@ -724,23 +719,37 @@ async def get_dashboard_stats(
 
 @app.get("/api/gpus", response_model=List[GPUInfo])
 async def get_gpu_info(username: str = Depends(get_current_user)):
+    """
+    Returns GPU information together with the list of models currently assigned
+    to each GPU. Each assigned model entry includes its database ID, name, and
+    the OS PID of the running process.
+    """
     try:
-        return [
-            GPUInfo(
-                id=g.id,
-                name=g.name,
-                memory_total_mb=int(g.memoryTotal),
-                memory_used_mb=int(g.memoryUsed),
-                utilization_percent=float(g.load * 100),
-                temperature=float(g.temperature) if g.temperature else None,
-                assigned_models=[
-                    m["name"]
-                    for m in running_models.values()
-                    if str(g.id) in m.get("gpu_ids", "0").split(",")
-                ],
+        gpu_infos = []
+        for g in GPUtil.getGPUs():
+            assigned = []
+            for model_id, info in running_models.items():
+                gpu_id_list = [int(x) for x in info["gpu_ids"].split(",") if x.strip().isdigit()]
+                if g.id in gpu_id_list:
+                    assigned.append(
+                        GPUAssignedModel(
+                            id=model_id,
+                            name=info["name"],
+                            pid=info["pid"],
+                        )
+                    )
+            gpu_infos.append(
+                GPUInfo(
+                    id=g.id,
+                    name=g.name,
+                    memory_total_mb=int(g.memoryTotal),
+                    memory_used_mb=int(g.memoryUsed),
+                    utilization_percent=float(g.load * 100),
+                    temperature=float(g.temperature) if g.temperature else None,
+                    assigned_models=assigned,
+                )
             )
-            for g in GPUtil.getGPUs()
-        ]
+        return gpu_infos
     except Exception as e:
         print(f"Could not get GPU info: {e}")
         return []
