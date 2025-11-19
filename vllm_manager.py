@@ -590,9 +590,9 @@ async def start_model(
     if not model or model.download_status != "completed":
         raise HTTPException(404, "Model not downloaded or found.")
 
-    const config = model.config;
-    const port = find_available_port();
-    const gpu_ids = config.get("gpu_ids", "0");
+    config = model.config;
+    port = find_available_port();
+    gpu_ids = config.get("gpu_ids", "0");
 
     # Build the command line for the vLLM server.
     # NOTE: FP8 quantization is only supported when the model's weight
@@ -600,7 +600,7 @@ async def start_model(
     # Qwen3‑VL‑235B model does not meet this requirement, so we deliberately
     # skip adding the `--quantization fp8` flag unless the user explicitly
     # selects a supported method.
-    const cmd = [
+    cmd = [
         sys.executable,
         "-m",
         "vllm.entrypoints.openai.api_server",
@@ -623,7 +623,7 @@ async def start_model(
     ];
 
     # Add quantization flag only if it is set **and** not the unsupported "fp8".
-    const quant = config.get("quantization");
+    quant = config.get("quantization");
     if (quant && quant.toLowerCase() !== "fp8") {
         cmd.push("--quantization", quant);
     }
@@ -635,12 +635,12 @@ async def start_model(
         cmd.push("--enable-prefix-caching");
     }
 
-    const env = os.environ.copy();
+    env = os.environ.copy();
     env["CUDA_VISIBLE_DEVICES"] = gpu_ids;
 
-    const broadcaster = LogBroadcaster();
+    broadcaster = LogBroadcaster();
     log_broadcasters[model_id] = broadcaster;
-    const process = subprocess.Popen(
+    process = subprocess.Popen(
         cmd,
         env=env,
         preexec_fn=os.setsid,
