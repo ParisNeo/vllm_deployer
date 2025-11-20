@@ -8,20 +8,25 @@
     <style>
         .modal-bg { background-color: rgba(0,0,0,0.5); }
         .log-pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; }
-        /* Tooltip container */
-        .tooltip { position: relative; display: inline-flex; align-items: center; cursor: help; margin-left: 6px; }
-        /* Tooltip text */
-        .tooltip .tooltiptext {
-            visibility: hidden; width: 250px; background-color: #333; color: #fff; text-align: left;
-            border-radius: 6px; padding: 8px; position: absolute; z-index: 50; bottom: 125%; left: 50%;
-            margin-left: -125px; opacity: 0; transition: opacity 0.3s; font-size: 0.75rem; font-weight: normal;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 1px solid #4b5563;
+        
+        /* Tooltip Container */
+        .help-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 16px; height: 16px; border-radius: 50%;
+            background-color: #4B5563; color: white; font-size: 10px;
+            cursor: help; margin-left: 6px; font-weight: bold;
         }
-        .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-        /* Arrow */
-        .tooltip .tooltiptext::after {
+        .tooltip-container { position: relative; display: inline-block; }
+        .tooltip-container .tooltip-text {
+            visibility: hidden; width: 220px; background-color: #1F2937; color: #F3F4F6;
+            text-align: left; border: 1px solid #374151; border-radius: 6px; padding: 8px;
+            position: absolute; z-index: 10; bottom: 135%; left: 50%; margin-left: -110px;
+            opacity: 0; transition: opacity 0.2s; font-size: 0.75rem; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        .tooltip-container .tooltip-text::after {
             content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
-            border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent;
+            border-width: 5px; border-style: solid; border-color: #1F2937 transparent transparent transparent;
         }
 
         /* ANSI colour support for log output */
@@ -80,10 +85,13 @@
         <div id="dashboard-view" class="hidden">
             <header class="bg-gray-800/80 backdrop-blur-md shadow-lg sticky top-0 z-10">
                 <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-                    <h1 class="text-xl font-bold text-white">vLLM Manager</h1>
-                    <div>
-                        <span id="username-display" class="mr-4"></span>
-                        <button id="admin-settings-btn" class="mr-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md text-sm transition duration-300">Admin</button>
+                    <div class="flex items-center space-x-4">
+                         <h1 class="text-xl font-bold text-white">vLLM Manager</h1>
+                         <div class="text-xs px-2 py-1 bg-gray-700 rounded text-gray-300">Pro</div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="username-display" class="mr-2 hidden sm:inline"></span>
+                        <button id="admin-settings-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-3 rounded-md text-sm transition duration-300">Admin</button>
                         <button onclick="app.logout()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md text-sm transition duration-300">Logout</button>
                     </div>
                 </div>
@@ -95,7 +103,13 @@
 
                 <!-- GPU Info -->
                 <div class="mb-8">
-                    <h2 class="text-2xl font-bold mb-4">GPU Status</h2>
+                    <h2 class="text-2xl font-bold mb-4 flex items-center">
+                        GPU Status
+                        <span class="tooltip-container ml-2">
+                            <span class="help-icon">?</span>
+                            <span class="tooltip-text">Real-time GPU monitoring. Use 'Kill' to force stop rogue processes blocking VRAM.</span>
+                        </span>
+                    </h2>
                     <div id="gpu-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                 </div>
 
@@ -140,158 +154,144 @@
             </div>
         </div>
         
-        <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
-            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-                <div class="p-4 border-b border-gray-700 sticky top-0 bg-gray-800 z-10">
+        <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl my-8">
+                <div class="p-4 border-b border-gray-700">
                     <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
                 </div>
                 <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <input type="hidden" id="edit-model-id">
                     
-                     <!-- GPU Selection (Full Width) -->
                      <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-300 mb-2 flex items-center">
-                            GPU Selection
-                            <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white cursor-help">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Select the GPUs to run this model. If multiple are selected, the Tensor Parallel Size will be automatically updated to match.</span>
-                            </div>
+                            Select GPUs
+                             <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Check the GPUs you want to use. The Tensor Parallel Size will be automatically set to the number of GPUs selected.</span>
+                            </span>
                         </label>
-                        <div id="edit-gpu-ids-container" class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-700 p-3 rounded-md border border-gray-600">
-                            <!-- Checkboxes injected via JS -->
+                        <div id="gpu-selection-container" class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-700 p-3 rounded-md border border-gray-600">
+                            <!-- Checkboxes generated by JS -->
+                            <span class="text-xs text-gray-400">Loading GPUs...</span>
                         </div>
+                        <input type="hidden" id="edit-gpu-ids">
                     </div>
 
-                    <!-- Tensor Parallel Size -->
-                     <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Tensor Parallel Size
-                            <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Number of GPUs to split the model across. This must exactly match the number of selected GPUs above.</span>
-                            </div>
-                        </label>
-                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" readonly>
-                    </div>
-
-                    <!-- GPU Memory -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 flex items-center">
                             GPU Memory Utilization
-                             <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Fraction of VRAM to reserve (0.0-1.0). Decrease if you get OOM errors, increase for better KV cache (context) capacity.</span>
-                            </div>
+                            <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Fraction of GPU memory to use (0.1 - 1.0). Lower this if you get OOM errors.</span>
+                            </span>
                         </label>
-                        <input type="number" step="0.05" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <input type="number" step="0.01" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
                     </div>
 
-                    <!-- Max Model Length -->
+                     <div>
+                        <label class="block text-sm font-medium text-gray-300 flex items-center">
+                            Tensor Parallel Size
+                            <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Number of GPUs to split the model across. Auto-updates based on your GPU selection.</span>
+                            </span>
+                        </label>
+                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" readonly title="Auto-set based on GPU selection">
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Max Context Length
-                            <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Maximum context window size (in tokens). Reduce this if running out of memory with long prompts.</span>
-                            </div>
+                            Max Model Length
+                            <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Maximum context length (tokens). Decrease this if you run out of memory.</span>
+                            </span>
                         </label>
                         <input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
                     </div>
 
-                    <!-- Quantization -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Quantization
-                            <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Select the quantization method used by your model weights (e.g., awq, fp8). Leave as 'None' for unquantized models.</span>
-                            </div>
-                        </label>
-                        <select id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-white">
-                            <option value="">None</option>
-                            <option value="awq">AWQ</option>
-                            <option value="gptq">GPTQ</option>
-                            <option value="fp8">FP8 (W8A8)</option>
-                            <option value="int8">INT8</option>
-                            <option value="marlin">Marlin</option>
-                            <option value="squeezellm">SqueezeLLM</option>
-                            <option value="bitsandbytes">BitsAndBytes</option>
-                        </select>
-                    </div>
-
-                    <!-- Datatype -->
                      <div>
                         <label class="block text-sm font-medium text-gray-300 flex items-center">
                             Datatype
-                             <div class="tooltip">
-                                <span class="text-gray-400 hover:text-white">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                </span>
-                                <span class="tooltiptext">Weight precision. 'auto' is usually best. Use 'float16' or 'bfloat16' if 'auto' fails.</span>
-                            </div>
+                            <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Weight precision. 'auto' is usually best. Use 'float16' for older GPUs.</span>
+                            </span>
                         </label>
-                        <input type="text" id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                        <select id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                            <option value="auto">auto</option>
+                            <option value="float16">float16</option>
+                            <option value="bfloat16">bfloat16</option>
+                            <option value="float32">float32</option>
+                        </select>
                     </div>
 
-                    <!-- Checkboxes -->
-                    <div class="md:col-span-2 flex flex-wrap gap-6 pt-4 border-t border-gray-700">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 flex items-center">
+                            Quantization
+                            <span class="tooltip-container">
+                                <span class="help-icon">?</span>
+                                <span class="tooltip-text">Compression method. Must match your model file (e.g., 'awq' for AWQ models).</span>
+                            </span>
+                        </label>
+                        <select id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
+                            <option value="">None (No Quantization)</option>
+                            <option value="awq">AWQ</option>
+                            <option value="gptq">GPTQ</option>
+                            <option value="squeezellm">SqueezeLLM</option>
+                            <option value="fp8">FP8 (W8A8)</option>
+                            <option value="bitsandbytes">BitsAndBytes (int8/nf4)</option>
+                            <option value="gguf">GGUF (Experimental)</option>
+                            <option value="fbgemm_fp8">FBGEMM FP8</option>
+                            <option value="marlin">Marlin</option>
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2 flex flex-col space-y-3 bg-gray-700/30 p-3 rounded">
                          <div class="flex items-center">
                             <input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
                             <label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300 flex items-center">
                                 Trust Remote Code
-                                <div class="tooltip">
-                                    <span class="text-gray-400 hover:text-white ml-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                    </span>
-                                    <span class="tooltiptext">Allow the model to run custom Python code. Required for some non-standard architectures.</span>
-                                </div>
+                                <span class="tooltip-container">
+                                    <span class="help-icon">?</span>
+                                    <span class="tooltip-text">Allow model execution code. Required for some new model architectures.</span>
+                                </span>
                             </label>
                         </div>
                          <div class="flex items-center">
                             <input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
                             <label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300 flex items-center">
                                 Enable Prefix Caching
-                                <div class="tooltip">
-                                    <span class="text-gray-400 hover:text-white ml-1">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
-                                    </span>
-                                    <span class="tooltiptext">Caches initial parts of prompts (system prompts, few-shot examples) to speed up processing.</span>
-                                </div>
+                                <span class="tooltip-container">
+                                    <span class="help-icon">?</span>
+                                    <span class="tooltip-text">Reuses KV cache for common prefixes. speeds up multi-turn chat significantly.</span>
+                                </span>
                             </label>
                         </div>
                     </div>
                 </form>
-                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2 sticky bottom-0">
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
                     <button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
                     <button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
                 </div>
             </div>
         </div>
-        
+
         <!-- Admin Settings Modal -->
         <div id="admin-settings-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
-             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
-                <div class="p-4 border-b border-gray-700">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
                     <h3 class="text-lg font-semibold">Admin Settings</h3>
+                    <button onclick="app.hideAdminSettingsModal()" class="text-gray-400 hover:text-white">&times;</button>
                 </div>
                 <div id="admin-settings-content" class="p-6">
-                    <!-- Content injected via JS -->
+                    <!-- Content rendered by JS -->
                 </div>
                 <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
-                    <button onclick="app.hideAdminSettingsModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Close</button>
-                    <button id="save-admin-settings-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button>
+                     <button onclick="app.hideAdminSettingsModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Close</button>
+                     <button id="save-admin-settings-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button>
                 </div>
-             </div>
+            </div>
         </div>
 
     </div>

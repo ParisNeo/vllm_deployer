@@ -716,6 +716,9 @@ const app = {
         }
     },
 
+    // -------------------------------------------------------------------
+    // UPDATED: Open Edit Modal with GPU Checkbox Rendering
+    // -------------------------------------------------------------------
     async openEditModal(modelId) {
         try {
             const [models, gpus] = await Promise.all([
@@ -729,47 +732,33 @@ const app = {
                 return;
             }
 
-            document.getElementById('edit-model-id').value = model.id;
-            document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
-            
-            // Generate GPU Checkboxes
-            const container = document.getElementById('edit-gpu-ids-container');
-            container.innerHTML = '';
-            
-            const currentIds = (model.config.gpu_ids || '0').split(',').map(s => s.trim());
-            
+            // Render GPU Checkboxes
+            const gpuContainer = document.getElementById('gpu-selection-container');
             if (gpus.length === 0) {
-                container.innerHTML = '<span class="text-sm text-gray-400 col-span-full">No GPUs detected.</span>';
+                gpuContainer.innerHTML = '<span class="text-red-400 text-xs">No GPUs detected!</span>';
             } else {
-                gpus.forEach(gpu => {
-                    const isChecked = currentIds.includes(String(gpu.id));
-                    const div = document.createElement('div');
-                    div.className = 'flex items-center';
-                    div.innerHTML = `
-                        <input type="checkbox" id="gpu-check-${gpu.id}" value="${gpu.id}" ${isChecked ? 'checked' : ''} 
-                               class="gpu-checkbox h-4 w-4 bg-gray-700 border-gray-500 rounded text-indigo-600 focus:ring-indigo-500">
-                        <label for="gpu-check-${gpu.id}" class="ml-2 text-sm text-gray-200 truncate" title="${gpu.name}">
-                            GPU ${gpu.id}
+                const currentGpuIds = (model.config.gpu_ids || "").split(',').map(s => s.trim());
+                gpuContainer.innerHTML = gpus.map(g => {
+                    const isChecked = currentGpuIds.includes(String(g.id));
+                    return `
+                        <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-600 p-1 rounded">
+                            <input type="checkbox" 
+                                   class="gpu-checkbox form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-500 rounded focus:ring-indigo-500" 
+                                   value="${g.id}" 
+                                   ${isChecked ? 'checked' : ''}
+                                   onchange="app.updateTensorParallelFromSelection()">
+                            <span class="text-sm text-gray-200">GPU ${g.id}</span>
                         </label>
                     `;
-                    container.appendChild(div);
-                });
+                }).join('');
             }
 
-            // Auto-update Tensor Parallel Size logic
-            const checkboxes = container.querySelectorAll('.gpu-checkbox');
-            const tpInput = document.getElementById('edit-tensor-parallel');
-            
-            const updateTP = () => {
-                const checkedCount = container.querySelectorAll('.gpu-checkbox:checked').length;
-                tpInput.value = checkedCount > 0 ? checkedCount : 1;
-            };
-            
-            checkboxes.forEach(cb => cb.addEventListener('change', updateTP));
-            
-            // Initial set values
+            document.getElementById('edit-model-id').value = model.id;
+            document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
+            // We don't use the text input for GPU IDs anymore, but we keep it hidden just in case logic needs it
+            document.getElementById('edit-gpu-ids').value = model.config.gpu_ids || '0';
             document.getElementById('edit-gpu-mem').value = model.config.gpu_memory_utilization;
-            document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size || currentIds.length; // Fallback to ID count if unset
+            document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size;
             document.getElementById('edit-max-len').value = model.config.max_model_len;
             document.getElementById('edit-dtype').value = model.config.dtype;
             document.getElementById('edit-quantization').value = model.config.quantization || '';
@@ -777,9 +766,25 @@ const app = {
             document.getElementById('edit-prefix-caching').checked = model.config.enable_prefix_caching;
             
             this.ui.showEditModal();
+            
+            // Initial Calculation
+            this.updateTensorParallelFromSelection();
+
         } catch (e) {
             alert('Could not fetch model details: ' + e.message);
         }
+    },
+
+    // -------------------------------------------------------------------
+    // NEW: Auto-calculate Tensor Parallel size based on checked GPUs
+    // -------------------------------------------------------------------
+    updateTensorParallelFromSelection() {
+        const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
+        const count = checkboxes.length;
+        const tpInput = document.getElementById('edit-tensor-parallel');
+        
+        // Default to 1 if nothing selected (though typically user should select at least one)
+        tpInput.value = count > 0 ? count : 1;
     },
 
     async saveModelConfig() {
@@ -787,18 +792,20 @@ const app = {
         
         // Collect checked GPU IDs
         const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
-        const selectedIds = Array.from(checkboxes).map(cb => cb.value).join(',');
+        const selectedGpuIds = Array.from(checkboxes).map(cb => cb.value).join(',');
         
-        if (!selectedIds) {
-            alert('Please select at least one GPU.');
+        if (!selectedGpuIds) {
+            alert("Please select at least one GPU.");
             return;
         }
 
+        // Ensure TP size matches selection count (auto-fix logic)
+        const tpSize = checkboxes.length;
+
         const config = {
-            gpu_ids: selectedIds,
+            gpu_ids: selectedGpuIds,
             gpu_memory_utilization: parseFloat(document.getElementById('edit-gpu-mem').value),
-            // We use the auto-calculated value from the UI
-            tensor_parallel_size: parseInt(document.getElementById('edit-tensor-parallel').value),
+            tensor_parallel_size: tpSize, // Auto-enforce this to prevent OOM on GPU 0
             max_model_len: parseInt(document.getElementById('edit-max-len').value),
             dtype: document.getElementById('edit-dtype').value,
             quantization: document.getElementById('edit-quantization').value || null,
