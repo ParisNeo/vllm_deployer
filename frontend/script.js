@@ -412,6 +412,40 @@ const app = {
                 </div>
                 `;
             }).join('');
+        },
+
+        // ----------------------------------------------------------------
+        // NEW: Render search results for Hub Browser
+        // ----------------------------------------------------------------
+        renderHubResults(results) {
+            const container = document.getElementById('browse-results');
+            if (!container) return;
+            if (!results || results.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No models found matching your criteria.</div>';
+                return;
+            }
+
+            container.innerHTML = results.map(m => `
+                <div class="bg-gray-800 p-4 rounded border border-gray-700 flex justify-between items-center hover:bg-gray-750 transition">
+                    <div class="flex-grow min-w-0 mr-4">
+                        <h4 class="font-bold text-indigo-400 truncate">${m.id}</h4>
+                        <div class="text-xs text-gray-400 flex space-x-3 mt-1">
+                            <span>⬇️ ${this.formatNumber(m.downloads)}</span>
+                            <span>❤️ ${this.formatNumber(m.likes)}</span>
+                            <span class="bg-gray-700 px-1.5 rounded text-gray-300">${m.pipeline_tag || 'unknown'}</span>
+                        </div>
+                    </div>
+                    <button onclick="app.selectModelFromHub('${m.id}')" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold py-2 px-4 rounded transition whitespace-nowrap">
+                        Pull
+                    </button>
+                </div>
+            `).join('');
+        },
+        
+        formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num;
         }
     },
 
@@ -813,6 +847,52 @@ const app = {
             this.loadModels();
         } catch (e) {
             alert('Failed to save configuration: ' + e.message);
+        }
+    },
+
+    // ----------------------------------------------------------------
+    // Hub Browser Logic
+    // ----------------------------------------------------------------
+    openBrowseModal() {
+        const modal = document.getElementById('browse-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            // Trigger a default search if empty
+            if (!document.getElementById('browse-results').innerHTML.includes('Pull')) {
+                this.searchHub(); 
+            }
+        }
+    },
+
+    hideBrowseModal() {
+        document.getElementById('browse-modal').classList.add('hidden');
+    },
+
+    async searchHub() {
+        const query = document.getElementById('browse-search').value;
+        const filter = document.getElementById('browse-filter').value;
+        const container = document.getElementById('browse-results');
+        container.innerHTML = '<div class="text-center text-gray-400 mt-10"><svg class="animate-spin h-8 w-8 text-indigo-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Searching Hugging Face...</div>';
+
+        try {
+            const params = new URLSearchParams();
+            if (query) params.append('query', query);
+            if (filter) params.append('filter_type', filter);
+
+            const results = await this.api.get(`/api/hub/search?${params.toString()}`);
+            this.ui.renderHubResults(results);
+        } catch (e) {
+            container.innerHTML = `<div class="text-center text-red-400 mt-10">Search failed: ${e.message}</div>`;
+        }
+    },
+
+    selectModelFromHub(modelId) {
+        this.hideBrowseModal();
+        document.getElementById('hf-model-id').value = modelId;
+        // Automatically trigger pull? Or let user decide?
+        // Let's trigger pull for convenience
+        if (confirm(`Pull model '${modelId}' now?`)) {
+            this.pullModel();
         }
     },
 
