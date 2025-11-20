@@ -755,7 +755,6 @@ const app = {
 
             document.getElementById('edit-model-id').value = model.id;
             document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
-            // We don't use the text input for GPU IDs anymore, but we keep it hidden just in case logic needs it
             document.getElementById('edit-gpu-ids').value = model.config.gpu_ids || '0';
             document.getElementById('edit-gpu-mem').value = model.config.gpu_memory_utilization;
             document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size;
@@ -775,15 +774,10 @@ const app = {
         }
     },
 
-    // -------------------------------------------------------------------
-    // NEW: Auto-calculate Tensor Parallel size based on checked GPUs
-    // -------------------------------------------------------------------
     updateTensorParallelFromSelection() {
         const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
         const count = checkboxes.length;
         const tpInput = document.getElementById('edit-tensor-parallel');
-        
-        // Default to 1 if nothing selected (though typically user should select at least one)
         tpInput.value = count > 0 ? count : 1;
     },
 
@@ -799,13 +793,13 @@ const app = {
             return;
         }
 
-        // Ensure TP size matches selection count (auto-fix logic)
+        // Ensure TP size matches selection count
         const tpSize = checkboxes.length;
 
         const config = {
             gpu_ids: selectedGpuIds,
             gpu_memory_utilization: parseFloat(document.getElementById('edit-gpu-mem').value),
-            tensor_parallel_size: tpSize, // Auto-enforce this to prevent OOM on GPU 0
+            tensor_parallel_size: tpSize,
             max_model_len: parseInt(document.getElementById('edit-max-len').value),
             dtype: document.getElementById('edit-dtype').value,
             quantization: document.getElementById('edit-quantization').value || null,
@@ -824,6 +818,14 @@ const app = {
 
     hideLogModal() {
         this.ui.hideLogModal();
+    },
+
+    copyLog() {
+        this.ui.copyLog();
+    },
+    
+    saveLog() {
+        this.ui.saveLog();
     },
 
     hideEditModal() {
