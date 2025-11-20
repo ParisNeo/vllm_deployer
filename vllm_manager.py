@@ -1,6 +1,6 @@
 """
 vLLM Manager Pro - Advanced Web UI for vLLM Instance Management
-Features: DB Backend, UI-based model pulling, UI-based upgrades, Authentication, GPU Management
+Features: DB Backend, UI-based model pulling, UI-based upgrades, Authentication, GPU Management, Secure Sudo
 """
 
 import asyncio
@@ -15,6 +15,7 @@ import sys
 import collections
 import csv
 import io
+import base64
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
@@ -33,6 +34,16 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, JSON, Float
 from sqlalchemy.orm import sessionmaker, declarative_base
 from huggingface_hub import snapshot_download, HfFolder
 
+# Cryptography for secure sudo password handling
+try:
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding
+    from cryptography.hazmat.primitives import serialization, hashes
+    from cryptography.hazmat.backends import default_backend
+    HAS_CRYPTO = True
+except ImportError:
+    HAS_CRYPTO = False
+    print("WARNING: 'cryptography' library not found. Secure password handling disabled.")
+
 # ========================================================
 # Configuration
 # ========================================================
@@ -47,6 +58,62 @@ SESSION_FILE = Path(".manager_sessions.json")
 SESSION_TIMEOUT = 3600  # 1 hour
 
 MODEL_DIR.mkdir(exist_ok=True)
+
+# ========================================================
+# Security: RSA Key Generation (Transient)
+# ========================================================
+# We generate a new key pair every time the server restarts.
+# This public key is sent to the frontend to encrypt the sudo password.
+# The private key never leaves the server and is used to decrypt.
+rsa_private_key = None
+rsa_public_jwk = None
+
+if HAS_CRYPTO:
+    rsa_private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+        backend=default_backend()
+    )
+    
+    # Prepare JWK for frontend
+    pub_nums = rsa_private_key.public_key().public_numbers()
+    
+    def int_to_base64(value):
+        """Convert integer to base64url-encoded string"""
+        value_hex = format(value, 'x')
+        # Ensure even length
+        if len(value_hex) % 2 == 1:
+            value_hex = '0' + value_hex
+        value_bytes = bytes.fromhex(value_hex)
+        return base64.urlsafe_b64encode(value_bytes).decode('utf-8').rstrip('=')
+
+    rsa_public_jwk = {
+        "kty": "RSA",
+        "n": int_to_base64(pub_nums.n),
+        "e": int_to_base64(pub_nums.e),
+        "alg": "RSA-OAEP-256",
+        "ext": True,
+        "key_ops": ["encrypt"]
+    }
+
+def decrypt_password(encrypted_b64: str) -> str:
+    if not HAS_CRYPTO or not rsa_private_key:
+        raise Exception("Encryption not available on server.")
+    
+    try:
+        encrypted_bytes = base64.b64decode(encrypted_b64)
+        decrypted = rsa_private_key.decrypt(
+            encrypted_bytes,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return decrypted.decode('utf-8')
+    except Exception as e:
+        raise Exception("Decryption failed. Keys may have changed or data is corrupt.")
+
 
 # ========================================================
 # Database Setup
@@ -185,6 +252,11 @@ class AdminSettings(BaseModel):
     is_using_default_password: bool
 
 
+class KillProcessRequest(BaseModel):
+    # This is now an encrypted string (Base64), not plain text
+    encrypted_sudo_password: Optional[str] = None
+
+
 # ========================================================
 # Log Broadcasting
 # ========================================================
@@ -218,7 +290,7 @@ class LogBroadcaster:
 # ========================================================
 # App Setup & Global State
 # ========================================================
-app = FastAPI(title="vLLM Manager Pro", version="3.3.0")
+app = FastAPI(title="vLLM Manager Pro", version="3.3.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -575,6 +647,13 @@ async def check_auth(request: Request):
         "username": sessions[token]["username"] if is_auth else None,
     }
 
+@app.get("/api/security/public-key")
+async def get_public_key():
+    """Returns the RSA public key in JWK format for client-side encryption."""
+    if not HAS_CRYPTO:
+        raise HTTPException(status_code=501, detail="Encryption not available")
+    return rsa_public_jwk
+
 
 @app.get("/api/models", response_model=List[ModelStatus])
 async def list_models(
@@ -810,8 +889,16 @@ async def get_gpu_info(username: str = Depends(get_current_user)):
         return []
 
 
-@app.delete("/api/gpus/kill/{pid}")
-async def kill_gpu_process(pid: int, username: str = Depends(get_current_user)):
+@app.post("/api/gpus/kill/{pid}")
+async def kill_gpu_process(
+    pid: int, 
+    req: KillProcessRequest = None,
+    username: str = Depends(get_current_user)
+):
+    # Handle default if None
+    if req is None:
+        req = KillProcessRequest()
+
     # Check if it's a managed model first
     managed_id = None
     for mid, info in running_models.items():
@@ -825,19 +912,42 @@ async def kill_gpu_process(pid: int, username: str = Depends(get_current_user)):
     # Generic kill for non-managed processes
     try:
         os.kill(pid, signal.SIGTERM)
-        # Wait briefly to see if it dies? 
-        # We can't easily check immediately without blocking, but client will refresh.
         return {"success": True, "message": f"Process {pid} killed."}
     except PermissionError:
-        # Try sudo
-        if os.name != 'nt':
-            try:
-                subprocess.run(["sudo", "kill", "-9", str(pid)], check=True, capture_output=True)
-                return {"success": True, "message": f"Process {pid} killed via sudo."}
-            except subprocess.CalledProcessError as e:
-                raise HTTPException(status_code=403, detail=f"Permission denied and sudo failed: {e.stderr}")
-        else:
-            raise HTTPException(status_code=403, detail="Permission denied.")
+        if os.name == 'nt':
+            raise HTTPException(status_code=403, detail="Permission denied. Cannot kill system process on Windows.")
+            
+        # Check for encrypted password
+        sudo_pass = None
+        if req.encrypted_sudo_password:
+             try:
+                 sudo_pass = decrypt_password(req.encrypted_sudo_password)
+             except Exception as e:
+                 raise HTTPException(status_code=400, detail=f"Decryption error: {str(e)}")
+        
+        if not sudo_pass:
+            raise HTTPException(
+                status_code=403, 
+                detail="Permission denied. Sudo password required."
+            )
+            
+        try:
+            # Use sudo -S to read password from stdin
+            cmd = ["sudo", "-S", "kill", "-9", str(pid)]
+            proc = subprocess.run(
+                cmd, 
+                input=f"{sudo_pass}\n", 
+                check=True, 
+                capture_output=True, 
+                text=True
+            )
+            return {"success": True, "message": f"Process {pid} killed via sudo."}
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.strip() if e.stderr else "Unknown sudo error"
+            if "try again" in err_msg.lower() or "password" in err_msg.lower():
+                 raise HTTPException(status_code=401, detail="Invalid sudo password.")
+            raise HTTPException(status_code=500, detail=f"Sudo failed: {err_msg}")
+            
     except ProcessLookupError:
         raise HTTPException(status_code=404, detail="Process not found")
     except Exception as e:

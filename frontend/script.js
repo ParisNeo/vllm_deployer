@@ -6,6 +6,7 @@ const app = {
     state: {
         refreshInterval: null,
         logWs: null,
+        publicKey: null,
     },
     api: {
         async get(endpoint) {
@@ -599,15 +600,68 @@ const app = {
             alert('Failed to stop model: ' + e.message);
         }
     },
+    
+    // Helper to encrypt password using Web Crypto API
+    async encryptPassword(password) {
+        if (!this.state.publicKey) {
+            // Fetch the JWK public key from server
+            try {
+                const jwk = await this.api.get('/api/security/public-key');
+                this.state.publicKey = await window.crypto.subtle.importKey(
+                    "jwk",
+                    jwk,
+                    {
+                        name: "RSA-OAEP",
+                        hash: "SHA-256"
+                    },
+                    true,
+                    ["encrypt"]
+                );
+            } catch (e) {
+                console.error("Failed to load encryption key:", e);
+                throw new Error("Encryption not supported by server or network error.");
+            }
+        }
+
+        const enc = new TextEncoder();
+        const encoded = enc.encode(password);
+        
+        const encrypted = await window.crypto.subtle.encrypt(
+            {
+                name: "RSA-OAEP"
+            },
+            this.state.publicKey,
+            encoded
+        );
+        
+        // Convert ArrayBuffer to Base64
+        return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+    },
 
     async killGpuProcess(pid) {
         if (confirm(`Are you sure you want to KILL process ${pid}? This may be an external process.`)) {
             try {
-                const res = await this.api.del(`/api/gpus/kill/${pid}`);
-                alert(res.message || 'Process killed.');
+                // First attempt: Try without password
+                await this.api.post(`/api/gpus/kill/${pid}`, {});
+                alert('Process killed.');
                 this.refreshStats();
             } catch (e) {
-                alert('Failed to kill process: ' + e.message);
+                // Check if it's a permission issue (403)
+                if (e.message.includes('Sudo password required') || e.message.includes('Permission denied')) {
+                    const password = prompt("Permission denied. This process requires root privileges.\nPlease enter sudo password (encrypted transmission):");
+                    if (password) {
+                        try {
+                             const encryptedPass = await this.encryptPassword(password);
+                             await this.api.post(`/api/gpus/kill/${pid}`, { encrypted_sudo_password: encryptedPass });
+                             alert('Process killed via sudo.');
+                             this.refreshStats();
+                        } catch (e2) {
+                            alert('Failed to kill process: ' + e2.message);
+                        }
+                    }
+                } else {
+                    alert('Failed to kill process: ' + e.message);
+                }
             }
         }
     },

@@ -2,7 +2,7 @@
 
 #############################################
 # vLLM Deployer Installation Script
-# Version: 1.3.1
+# Version: 1.3.2
 # Description: Sets up vLLM with management interface
 #############################################
 
@@ -44,7 +44,7 @@ print_info() {
 
 # Banner
 echo ""
-print_header "vLLM Deployer Installer v1.3.1"
+print_header "vLLM Deployer Installer v1.3.2"
 echo ""
 echo -e "${MAGENTA}Fast, scalable LLM serving with management interface${NC}"
 echo ""
@@ -270,8 +270,9 @@ echo ""
 print_step 6 $TOTAL_STEPS "Installing management interface dependencies"
 echo ""
 
-print_info "Installing FastAPI, Uvicorn, SQLAlchemy, and utilities..."
-pip install fastapi uvicorn httpx psutil gputil pydantic sqlalchemy huggingface-hub --quiet
+print_info "Installing FastAPI, Uvicorn, SQLAlchemy, Cryptography, and utilities..."
+# Added cryptography for secure password handling
+pip install fastapi uvicorn httpx psutil gputil pydantic sqlalchemy huggingface-hub cryptography --quiet
 if [ $? -eq 0 ]; then
     print_success "Management dependencies installed"
 else
