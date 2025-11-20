@@ -3,21 +3,25 @@
     {
       "id": "google/gemma-3-27b-it",
       "name": "Gemma 3 27B",
+      "size": "54 GB",
       "desc": "Google's flagship open model. 128k context, multimodal (text/image), rivals GPT-4o."
     },
     {
       "id": "Qwen/Qwen3-72B-Instruct",
       "name": "Qwen 3 72B",
+      "size": "144 GB",
       "desc": "Alibaba's latest beast. Exceptional reasoning & coding. The new open-weight king."
     },
     {
       "id": "meta-llama/Llama-3.3-70B-Instruct",
       "name": "Llama 3.3 70B",
+      "size": "140 GB",
       "desc": "Meta's refined 70B model. Multilingual, stronger reasoning, and highly efficient."
     },
     {
       "id": "mistralai/Mistral-Large-2411",
       "name": "Mistral Large 2 (Nov 2025)",
+      "size": "246 GB",
       "desc": "Latest dense model from Mistral. 123B parameters, top-tier reasoning and RAG."
     }
   ],
@@ -25,11 +29,13 @@
     {
       "id": "deepseek-ai/DeepSeek-V3",
       "name": "DeepSeek V3",
+      "size": "680 GB",
       "desc": "671B MoE model (37B active). massive scale, efficient inference, strong math/code."
     },
     {
       "id": "moonshotai/Kimi-k2-thinking",
       "name": "Kimi K2 Thinking",
+      "size": "14 GB",
       "desc": "Specialized reasoning model with 'Chain of Thought' capabilities enabled by default."
     }
   ],
@@ -37,16 +43,19 @@
     {
       "id": "Qwen/Qwen3-VL-7B-Instruct",
       "name": "Qwen3-VL 7B",
+      "size": "15 GB",
       "desc": "SOTA vision-language model. Handles video, charts, and complex visual reasoning."
     },
     {
       "id": "meta-llama/Llama-3.2-90B-Vision-Instruct",
       "name": "Llama 3.2 90B Vision",
+      "size": "180 GB",
       "desc": "The heavy hitter for image reasoning from Meta. Drop-in replacement for text models."
     },
     {
       "id": "openbmb/MiniCPM-V-3_0",
       "name": "MiniCPM-V 3.0",
+      "size": "8 GB",
       "desc": "Edge-optimized vision model. Outperforms GPT-4V on mobile-class hardware."
     }
   ],
@@ -54,16 +63,19 @@
     {
       "id": "google/gemma-3-4b-it",
       "name": "Gemma 3 4B",
+      "size": "8 GB",
       "desc": "Highly capable small model. Perfect for local consumer GPUs (8GB VRAM)."
     },
     {
       "id": "meta-llama/Llama-3.2-3B-Instruct",
       "name": "Llama 3.2 3B",
+      "size": "6 GB",
       "desc": "The standard for edge AI. 128k context, fast, and reliable for simple tasks."
     },
     {
       "id": "Qwen/Qwen3-1.5B-Instruct",
       "name": "Qwen 3 1.5B",
+      "size": "3 GB",
       "desc": "Tiny but mighty. Great for speculative decoding or extreme edge constraints."
     }
   ],
@@ -71,16 +83,19 @@
     {
       "id": "ibm-granite/granite-3.0-8b-instruct",
       "name": "IBM Granite 3.0 8B",
+      "size": "16 GB",
       "desc": "Enterprise-grade, Apache 2.0. Optimized for RAG, tool use, and business data."
     },
     {
       "id": "Qwen/Qwen2.5-Coder-32B-Instruct",
       "name": "Qwen 2.5 Coder 32B",
+      "size": "64 GB",
       "desc": "Dedicated coding specialist. Rivals Claude 3.5 Sonnet in coding benchmarks."
     },
     {
       "id": "openai/GPT-OSS-20B",
       "name": "GPT-OSS 20B",
+      "size": "40 GB",
       "desc": "OpenAI's open-weight entry. Fast, robust, and optimized for agentic workflows."
     }
   ]

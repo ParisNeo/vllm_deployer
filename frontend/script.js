@@ -50,6 +50,13 @@ const app = {
         }
     },
 
+    // Helper moved to app scope to fix "app.formatNumber is not a function"
+    formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+        return num;
+    },
+
     ui: {
         showView(viewId) {
             ['login-view', 'dashboard-view'].forEach(id => document.getElementById(id).classList.add('hidden'));
@@ -205,8 +212,8 @@ const app = {
 
         renderDashboardStats(stats) {
             document.getElementById('stats-grid').innerHTML = `
-                <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">CPU</div><div class="text-2xl font-bold">${stats.system_cpu_percent}%</div></div>
-                <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">RAM</div><div class="text-2xl font-bold">${stats.system_memory_percent}%</div></div>
+                <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">CPU</div><div class="text-2xl font-bold">${stats.system_cpu_percent.toFixed(1)}%</div></div>
+                <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">RAM</div><div class="text-2xl font-bold">${stats.system_memory_percent.toFixed(1)}%</div></div>
                 <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">Running</div><div class="text-2xl font-bold">${stats.running_models}</div></div>
                 <div class="bg-gray-800 p-4 rounded shadow border border-gray-700"><div class="text-gray-400 text-sm">Total</div><div class="text-2xl font-bold">${stats.total_models}</div></div>
             `;
@@ -227,7 +234,6 @@ const app = {
             const container = document.getElementById('browse-results');
             if (!container) return;
             
-            // If empty results on initial load
             if (!append && (!results || results.length === 0)) {
                 container.innerHTML = `
                     <div class="text-center text-gray-400 mt-10">
@@ -252,12 +258,10 @@ const app = {
             `).join('');
 
             if (append) {
-                // Remove old "Load More" button first
                 const oldBtn = document.getElementById('load-more-btn-container');
                 if (oldBtn) oldBtn.remove();
                 container.insertAdjacentHTML('beforeend', html);
             } else {
-                // Header for Hub Results
                 container.innerHTML = `
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-white font-bold">Hub Search Results</h4>
@@ -266,7 +270,6 @@ const app = {
                     ${html}`;
             }
 
-            // Add Load More button
             if (results.length > 0) {
                 container.insertAdjacentHTML('beforeend', `
                     <div id="load-more-btn-container" class="text-center mt-4 pb-2">
@@ -291,6 +294,7 @@ const app = {
                             <div class="flex items-center gap-2">
                                 <h4 class="font-bold text-white text-lg">${m.name}</h4>
                                 <span class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300">${m.id}</span>
+                                <span class="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">${m.size || 'Unknown'}</span>
                             </div>
                             <p class="text-sm text-gray-400 mt-1">${m.desc}</p>
                         </div>
@@ -301,39 +305,19 @@ const app = {
                  `).join('');
              }
              container.innerHTML = html;
-        },
-
-        formatNumber(num) {
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-            return num;
         }
     },
 
-    // ------------------------------------------
-    // App Logic
-    // ------------------------------------------
+    // Logic
     async init() {
         const loginForm = document.getElementById('login-form');
         if (loginForm) {
-            loginForm.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+            loginForm.addEventListener('submit', e => { e.preventDefault(); this.login(); });
+            return;
         }
-
-        const togglePasswordBtn = document.getElementById('toggle-password-btn');
-        if (togglePasswordBtn) {
-            togglePasswordBtn.addEventListener('click', () => { this.togglePasswordVisibility(); });
-        }
-
-        const adminSettingsBtn = document.getElementById('admin-settings-btn');
-        if (adminSettingsBtn) {
-            adminSettingsBtn.addEventListener('click', () => this.openAdminSettingsModal());
-        }
-
-        const saveAdminSettingsBtn = document.getElementById('save-admin-settings-btn');
-        if (saveAdminSettingsBtn) {
-            saveAdminSettingsBtn.addEventListener('click', () => this.changePassword());
-        }
-
+        document.getElementById('admin-settings-btn').onclick = () => this.openAdminSettingsModal();
+        document.getElementById('save-admin-settings-btn').onclick = () => this.changePassword();
+        
         try {
             const auth = await this.api.get('/api/check-auth');
             if (auth.authenticated) {
@@ -347,17 +331,18 @@ const app = {
     },
 
     async login() {
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const errorEl = document.getElementById('login-error');
-        errorEl.classList.add('hidden');
+        const u = document.getElementById('username').value;
+        const p = document.getElementById('password').value;
         try {
-            const res = await this.api.post('/api/login', { username, password });
-            if (res.success) { await this.init(); }
-        } catch (e) { errorEl.textContent = 'Login failed: ' + e.message; errorEl.classList.remove('hidden'); }
+            const res = await this.api.post('/api/login', { username: u, password: p });
+            if (res.success) location.reload();
+        } catch (e) {
+            document.getElementById('login-error').textContent = e.message;
+            document.getElementById('login-error').classList.remove('hidden');
+        }
     },
 
-    async logout() { await this.api.post('/api/logout', {}); await this.init(); },
+    async logout() { await this.api.post('/api/logout', {}); location.reload(); },
 
     async loadDashboard() {
         this.loadModels();
@@ -450,7 +435,6 @@ const app = {
         try {
             await this.api.post(`/api/models/${id}/start`);
             this.loadModels(); 
-            // Don't block, fetch name from DOM or cache if needed, but simple ID is fine
             this._listenToLogs(`/ws/logs/${id}`, `Starting Model ${id}`);
         } catch (e) {
             alert('Failed to start model: ' + e.message);
@@ -646,14 +630,10 @@ const app = {
         }
     },
 
-    // ----------------------------------------------------------------
-    // Hub Browser & Recommended Models
-    // ----------------------------------------------------------------
     openBrowseModal() {
         document.getElementById('browse-modal').classList.remove('hidden');
-        // Default to recommended if we haven't searched yet
         const container = document.getElementById('browse-results');
-        if (!container.innerHTML.trim() || container.innerHTML.includes('Search for models') || container.innerHTML.includes('No models found')) {
+        if (!container.innerHTML.trim() || container.innerHTML.includes('Search failed') || container.innerHTML.includes('No models found')) {
             this.loadRecommendedModels();
         }
     },
@@ -681,7 +661,6 @@ const app = {
         const filter = document.getElementById('browse-filter').value;
         const sort = document.getElementById('browse-sort').value;
         
-        // If neither query nor filter is set, show recommended. 
         if (!query && !filter && !append) {
             return this.loadRecommendedModels();
         }

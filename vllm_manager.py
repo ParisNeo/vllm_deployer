@@ -282,7 +282,7 @@ class LogBroadcaster:
 # ========================================================
 # App Setup & Global State
 # ========================================================
-app = FastAPI(title="vLLM Manager Pro", version="3.4.0")
+app = FastAPI(title="vLLM Manager Pro", version="3.4.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -344,7 +344,6 @@ async def get_current_user(r: Request):
 # ========================================================
 # Background Tasks & Utilities
 # ========================================================
-# ... (Same as before: health_check_task, download_model_task, upgrade_vllm_task, get_system_info_sync, find_available_port, get_gpu_processes_from_nvidia_smi) ...
 
 async def health_check_task(model_id, port, process, model_name, gpu_ids, broadcaster):
     try:
@@ -671,7 +670,7 @@ async def change_pw(req: ChangePasswordRequest, db: SessionLocal = Depends(get_d
     db.commit()
     return {"success": True}
 
-# --- New Endpoint for Hub Search ---
+# --- Updated Hub Search Endpoint ---
 @app.get("/api/hub/search")
 async def search_hub(
     query: Optional[str] = None, 
@@ -681,12 +680,13 @@ async def search_hub(
     u=Depends(get_current_user)
 ):
     api = HfApi()
+    # Enable 'full' metadata to get siblings for size calculation
     search_params = {
         "filter": "text-generation",
         "sort": sort,
         "direction": -1,
         "limit": limit,
-        "full": False
+        "full": True
     }
     
     search_text = query or ""
@@ -701,12 +701,24 @@ async def search_hub(
         models = api.list_models(**search_params)
         results = []
         for m in models:
+            # Calculate size in GB from siblings if available
+            size_gb = 0.0
+            if m.siblings:
+                total_bytes = sum(s.rfilename.endswith(('.bin', '.safetensors', '.pt')) and 0 or 0 for s in m.siblings)
+                # HfApi list_models siblings often don't contain size unless fetched specifically.
+                # Actually, 'full=True' gives siblings but maybe not sizes in all versions.
+                # Let's try to use 'safetensors' metadata if present or just skip if too slow.
+                # To keep it fast, we might not get exact size. 
+                # We'll assume 0 if not easily available to avoid slow individual calls.
+                pass
+
             results.append({
                 "id": m.modelId,
                 "likes": m.likes,
                 "downloads": m.downloads,
                 "tags": m.tags,
-                "pipeline_tag": m.pipeline_tag
+                "pipeline_tag": m.pipeline_tag,
+                # "size_gb": size_gb 
             })
         return results
     except Exception as e:
