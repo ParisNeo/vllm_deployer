@@ -50,7 +50,7 @@ const app = {
         }
     },
 
-    // Helper moved to app scope to fix "app.formatNumber is not a function"
+    // Helper function at app level to prevent scope issues
     formatNumber(num) {
         if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
         if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
@@ -67,24 +67,19 @@ const app = {
             const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
             const escaped = escapeHtml(text);
             const ansiRegex = /\x1b\[(\d+(?:;\d+)*)m/g;
-            const sgrMap = { 0:'ansi-reset', 1:'ansi-bold', 4:'ansi-underline', 30:'ansi-black', 31:'ansi-red', 32:'ansi-green', 33:'ansi-yellow', 34:'ansi-blue', 35:'ansi-magenta', 36:'ansi-cyan', 37:'ansi-white', 90:'ansi-bright-black', 91:'ansi-bright-red', 92:'ansi-bright-green', 93:'ansi-bright-yellow', 94:'ansi-bright-blue', 95:'ansi-bright-magenta', 96:'ansi-bright-cyan', 97:'ansi-bright-white' };
-            
-            let result = '';
-            let lastIndex = 0;
-            const stack = [];
-            let match;
-
+            const sgrMap = { 0:'ansi-reset', 1:'ansi-bold', 31:'ansi-red', 32:'ansi-green', 33:'ansi-yellow', 34:'ansi-blue' };
+            let result = '', lastIndex = 0, match;
             while ((match = ansiRegex.exec(escaped)) !== null) {
-                const index = match.index;
-                const codes = match[1].split(';').map(Number);
-                result += escaped.substring(lastIndex, index);
+                result += escaped.substring(lastIndex, match.index);
                 lastIndex = ansiRegex.lastIndex;
-                if (codes.includes(0)) { while (stack.length) { result += '</span>'; stack.pop(); } continue; }
-                const classes = codes.map(code => sgrMap[code]).filter(Boolean);
-                if (classes.length) { result += `<span class="${classes.join(' ')}">`; stack.push('</span>'); }
+                const codes = match[1].split(';').map(Number);
+                if (codes.includes(0)) result += '</span>';
+                else {
+                    const cls = codes.map(c => sgrMap[c]).filter(Boolean).join(' ');
+                    if (cls) result += `<span class="${cls}">`;
+                }
             }
             result += escaped.substring(lastIndex);
-            while (stack.length) result += stack.pop();
             return result;
         },
 
@@ -103,19 +98,12 @@ const app = {
             pre.scrollTop = pre.scrollHeight;
         },
         copyLog() {
-            const text = document.getElementById('log-pre').innerText;
-            navigator.clipboard.writeText(text).then(() => alert('Log copied.'));
+            navigator.clipboard.writeText(document.getElementById('log-pre').innerText).then(() => alert('Copied'));
         },
         saveLog() {
-            const text = document.getElementById('log-pre').innerText;
-            const blob = new Blob([text], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `vllm-log-${new Date().toISOString()}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+            const blob = new Blob([document.getElementById('log-pre').innerText], { type: 'text/plain' });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = `log-${Date.now()}.txt`; a.click();
         },
 
         showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
@@ -143,13 +131,13 @@ const app = {
         renderModelList(models) {
             const listEl = document.getElementById('model-list');
             if (models.length === 0) {
-                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model to get started.</div>`;
+                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found.</div>`;
                 return;
             }
             listEl.innerHTML = models.map(m => {
                 const statusColors = { running: 'bg-green-600', starting: 'bg-blue-600', error: 'bg-red-600', completed: 'bg-yellow-600' };
                 const badgeColor = statusColors[m.status_text] || 'bg-gray-600';
-                const quant = m.config && m.config.quantization ? m.config.quantization : 'None';
+                const quant = (m.config && m.config.quantization) ? m.config.quantization : 'None';
                 return `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-md flex flex-wrap gap-4 items-center justify-between">
                     <div class="flex-grow min-w-0">
@@ -158,7 +146,6 @@ const app = {
                         <div class="flex flex-wrap gap-2 mt-2 text-xs">
                             <span class="bg-gray-700 px-2 py-1 rounded text-gray-300">Size: ${m.size_gb.toFixed(1)} GB</span>
                             <span class="bg-gray-700 px-2 py-1 rounded text-gray-300">Quant: ${quant}</span>
-                            <span class="bg-gray-700 px-2 py-1 rounded text-gray-300">Type: ${m.model_type}</span>
                             <span class="px-2 py-1 rounded text-white ${badgeColor}">${m.status_text}</span>
                             ${m.port ? `<span class="bg-gray-700 px-2 py-1 rounded text-gray-300">Port: ${m.port}</span>` : ''}
                         </div>
@@ -182,17 +169,9 @@ const app = {
             if (!gpus || gpus.length === 0) { list.innerHTML = '<div class="text-gray-400 p-4 text-center bg-gray-800 rounded">No GPUs</div>'; return; }
             list.innerHTML = gpus.map(g => `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg border border-gray-700">
-                    <div class="flex justify-between mb-2">
-                        <span class="font-bold text-white">GPU ${g.id}: ${g.name}</span>
-                        <span class="text-gray-400 text-sm">${g.temperature || 0}°C</span>
-                    </div>
-                    <div class="h-2 bg-gray-700 rounded-full overflow-hidden mb-1">
-                        <div class="h-full bg-indigo-500" style="width: ${(g.memory_used_mb/g.memory_total_mb)*100}%"></div>
-                    </div>
-                    <div class="flex justify-between text-xs text-gray-400 mb-3">
-                        <span>${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB</span>
-                        <span>${g.utilization_percent.toFixed(0)}% Load</span>
-                    </div>
+                    <div class="flex justify-between mb-2"><span class="font-bold text-white">GPU ${g.id}: ${g.name}</span><span class="text-gray-400 text-sm">${g.temperature || 0}°C</span></div>
+                    <div class="h-2 bg-gray-700 rounded-full mb-1"><div class="h-full bg-indigo-500" style="width: ${(g.memory_used_mb/g.memory_total_mb)*100}%"></div></div>
+                    <div class="flex justify-between text-xs text-gray-400 mb-3"><span>${(g.memory_used_mb/1024).toFixed(1)} / ${(g.memory_total_mb/1024).toFixed(1)} GB</span><span>${g.utilization_percent.toFixed(0)}% Load</span></div>
                     <div class="space-y-1">
                         ${g.processes.length ? g.processes.map(p => `
                             <div class="flex justify-between items-center bg-gray-700/50 p-1.5 rounded text-xs">
@@ -200,8 +179,8 @@ const app = {
                                 <div class="flex items-center gap-2">
                                     <span class="text-gray-400">${p.gpu_memory_usage.toFixed(0)}MB</span>
                                     ${p.managed_model_id 
-                                        ? `<button onclick="app.stopModel(${p.managed_model_id})" class="text-yellow-400 hover:text-yellow-300 font-bold">Stop</button>` 
-                                        : `<button onclick="app.killGpuProcess(${p.pid})" class="text-red-400 hover:text-red-300 font-bold">Kill</button>`}
+                                        ? `<button onclick="app.stopModel(${p.managed_model_id})" class="text-yellow-400 font-bold">Stop</button>` 
+                                        : `<button onclick="app.killGpuProcess(${p.pid})" class="text-red-400 font-bold">Kill</button>`}
                                 </div>
                             </div>
                         `).join('') : '<div class="text-xs text-gray-500 italic">Idle</div>'}
@@ -222,27 +201,17 @@ const app = {
         renderSystemInfo(info) {
             document.getElementById('system-info-card').innerHTML = `
                 <h3 class="font-bold mb-2 text-lg">System</h3>
-                <div class="text-sm text-gray-300 space-y-1">
-                    <div>vLLM: <span class="text-indigo-400">${info.vllm_version}</span></div>
-                    <div>Mode: <span class="text-indigo-400">${info.dev_mode ? 'Dev' : 'Prod'}</span></div>
-                </div>
+                <div class="text-sm text-gray-300 space-y-1"><div>vLLM: <span class="text-indigo-400">${info.vllm_version}</span></div><div>Mode: <span class="text-indigo-400">${info.dev_mode?'Dev':'Prod'}</span></div></div>
                 <button onclick="app.upgradeVLLM()" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 text-white py-1.5 rounded text-sm font-bold">Upgrade vLLM</button>
             `;
         },
 
-        renderHubResults(results, append = false) {
+        renderHubResults(results, append) {
             const container = document.getElementById('browse-results');
-            if (!container) return;
-            
-            if (!append && (!results || results.length === 0)) {
-                container.innerHTML = `
-                    <div class="text-center text-gray-400 mt-10">
-                        <p>No models found.</p>
-                        <button onclick="app.loadRecommendedModels()" class="mt-2 text-indigo-400 hover:text-indigo-300 underline">View Recommended</button>
-                    </div>`;
+            if (!append && (!results || !results.length)) {
+                container.innerHTML = `<div class="text-center text-gray-400 mt-10"><p>No models found.</p><button onclick="app.loadRecommendedModels()" class="mt-2 text-indigo-400 underline">View Recommended</button></div>`;
                 return;
             }
-
             const html = results.map(m => `
                 <div class="bg-gray-800 p-3 rounded border border-gray-700 flex justify-between items-center mb-2 hover:bg-gray-750">
                     <div class="min-w-0 mr-2">
@@ -258,34 +227,19 @@ const app = {
             `).join('');
 
             if (append) {
-                const oldBtn = document.getElementById('load-more-btn-container');
-                if (oldBtn) oldBtn.remove();
+                const oldBtn = document.getElementById('load-more-btn-container'); if(oldBtn) oldBtn.remove();
                 container.insertAdjacentHTML('beforeend', html);
             } else {
-                container.innerHTML = `
-                    <div class="flex justify-between items-center mb-3">
-                        <h4 class="text-white font-bold">Hub Search Results</h4>
-                        <button onclick="app.loadRecommendedModels()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">Back to Recommended</button>
-                    </div>
-                    ${html}`;
+                container.innerHTML = `<div class="flex justify-between items-center mb-3"><h4 class="text-white font-bold">Hub Search Results</h4><button onclick="app.loadRecommendedModels()" class="text-xs bg-gray-700 px-2 py-1 rounded">Back to Recommended</button></div>${html}`;
             }
-
             if (results.length > 0) {
-                container.insertAdjacentHTML('beforeend', `
-                    <div id="load-more-btn-container" class="text-center mt-4 pb-2">
-                        <button onclick="app.searchHub(false, true)" class="bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2 px-6 rounded-full transition">
-                            Load More
-                        </button>
-                    </div>
-                `);
+                container.insertAdjacentHTML('beforeend', `<div id="load-more-btn-container" class="text-center mt-4 pb-2"><button onclick="app.searchHub(false, true)" class="bg-gray-700 hover:bg-gray-600 text-white text-sm font-bold py-2 px-6 rounded-full">Load More</button></div>`);
             }
         },
 
         renderRecommendedModels(categories) {
              const container = document.getElementById('browse-results');
-             if (!container) return;
-             
-             let html = '<div class="text-center text-gray-500 text-xs mb-4">Hand-picked state-of-the-art models for you</div>';
+             let html = '<div class="text-center text-gray-500 text-xs mb-4">Hand-picked state-of-the-art models</div>';
              for (const [category, models] of Object.entries(categories)) {
                  html += `<h4 class="text-indigo-400 font-bold text-md mt-6 mb-3 uppercase tracking-wider border-b border-gray-700 pb-1">${category}</h4>`;
                  html += models.map(m => `
@@ -294,13 +248,11 @@ const app = {
                             <div class="flex items-center gap-2">
                                 <h4 class="font-bold text-white text-lg">${m.name}</h4>
                                 <span class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300">${m.id}</span>
-                                <span class="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">${m.size || 'Unknown'}</span>
+                                <span class="text-xs bg-blue-900 text-blue-200 px-2 py-0.5 rounded">${m.size}</span>
                             </div>
                             <p class="text-sm text-gray-400 mt-1">${m.desc}</p>
                         </div>
-                        <button onclick="app.selectModelFromHub('${m.id}')" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-4 rounded transition whitespace-nowrap">
-                            Pull
-                        </button>
+                        <button onclick="app.selectModelFromHub('${m.id}')" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-4 rounded transition whitespace-nowrap">Pull</button>
                     </div>
                  `).join('');
              }
@@ -308,13 +260,11 @@ const app = {
         }
     },
 
-    // Logic
+    // App Logic
     async init() {
         const loginForm = document.getElementById('login-form');
-        if (loginForm) {
-            loginForm.addEventListener('submit', e => { e.preventDefault(); this.login(); });
-            return;
-        }
+        if (loginForm) { loginForm.addEventListener('submit', e => { e.preventDefault(); this.login(); }); }
+        
         document.getElementById('admin-settings-btn').onclick = () => this.openAdminSettingsModal();
         document.getElementById('save-admin-settings-btn').onclick = () => this.changePassword();
         
@@ -324,9 +274,7 @@ const app = {
                 this.ui.showView('dashboard-view');
                 document.getElementById('username-display').textContent = auth.username;
                 this.loadDashboard();
-            } else {
-                this.ui.showView('login-view');
-            }
+            } else { this.ui.showView('login-view'); }
         } catch (e) { this.ui.showView('login-view'); }
     },
 
@@ -341,12 +289,10 @@ const app = {
             document.getElementById('login-error').classList.remove('hidden');
         }
     },
-
     async logout() { await this.api.post('/api/logout', {}); location.reload(); },
 
     async loadDashboard() {
-        this.loadModels();
-        this.refreshStats();
+        this.loadModels(); this.refreshStats();
         if (this.state.refreshInterval) clearInterval(this.state.refreshInterval);
         this.state.refreshInterval = setInterval(() => { this.refreshStats(); this.loadModels(); }, 5000);
     },
@@ -360,15 +306,14 @@ const app = {
     },
 
     sortModels(models) {
-        const sortMethod = document.getElementById('model-sort').value;
+        const sort = document.getElementById('model-sort').value;
         return models.sort((a, b) => {
-            if (sortMethod === 'date_desc') return b.id - a.id;
-            if (sortMethod === 'date_asc') return a.id - b.id;
-            if (sortMethod === 'name_asc') return a.name.localeCompare(b.name);
-            if (sortMethod === 'size_desc') return b.size_gb - a.size_gb;
-            if (sortMethod === 'size_asc') return a.size_gb - b.size_gb;
-            if (sortMethod === 'type') return a.model_type.localeCompare(b.model_type);
-            if (sortMethod === 'quant') {
+            if (sort === 'date_desc') return b.id - a.id;
+            if (sort === 'name_asc') return a.name.localeCompare(b.name);
+            if (sort === 'size_desc') return b.size_gb - a.size_gb;
+            if (sort === 'size_asc') return a.size_gb - b.size_gb;
+            if (sort === 'type') return a.model_type.localeCompare(b.model_type);
+            if (sort === 'quant') {
                 const qA = (a.config && a.config.quantization) ? a.config.quantization : 'zzz';
                 const qB = (b.config && b.config.quantization) ? b.config.quantization : 'zzz';
                 return qA.localeCompare(qB);
@@ -379,385 +324,172 @@ const app = {
 
     async refreshStats() {
         try {
-            const [stats, gpus, sys] = await Promise.all([
-                this.api.get('/api/dashboard/stats'),
-                this.api.get('/api/gpus'),
-                this.api.get('/api/system/info')
-            ]);
-            this.ui.renderDashboardStats(stats);
-            this.ui.renderGpuList(gpus);
-            this.ui.renderSystemInfo(sys);
+            const [stats, gpus, sys] = await Promise.all([this.api.get('/api/dashboard/stats'), this.api.get('/api/gpus'), this.api.get('/api/system/info')]);
+            this.ui.renderDashboardStats(stats); this.ui.renderGpuList(gpus); this.ui.renderSystemInfo(sys);
         } catch (e) { console.error(e); }
     },
 
-    _listenToLogs(wsPath, modalTitle) {
-        this.ui.showLogModal(modalTitle);
-        if (this.state.logWs) { this.state.logWs.close(); }
-
-        const ws = new WebSocket(`ws://${window.location.host}${wsPath}`);
+    _listenToLogs(path, title) {
+        this.ui.showLogModal(title);
+        if (this.state.logWs) this.state.logWs.close();
+        const ws = new WebSocket(`ws://${location.host}${path}`);
         this.state.logWs = ws;
-
-        ws.onmessage = (event) => {
-            this.ui.appendLog(event.data);
-        };
-        ws.onclose = () => {
-            if (this.state.logWs === ws) { 
-                this.state.logWs = null;
-            }
-            if (wsPath.startsWith('/ws/pull') || wsPath.startsWith('/ws/upgrade')) {
-                this.loadDashboard();
-            }
-        };
+        ws.onmessage = e => this.ui.appendLog(e.data);
+        ws.onclose = () => { this.state.logWs = null; this.loadDashboard(); };
     },
 
     async pullModel() {
-        const hf_model_id = document.getElementById('hf-model-id').value;
-        if (!hf_model_id) return alert('Please enter a HuggingFace Model ID.');
+        const id = document.getElementById('hf-model-id').value;
+        if (!id) return alert('Enter ID');
         try {
-            const res = await this.api.post('/api/models/pull', { hf_model_id });
-            this._listenToLogs(`/ws/pull/${res.model_id}`, `Downloading ${hf_model_id}`);
-        } catch (e) {
-            alert('Error starting download: ' + e.message);
-        }
+            const res = await this.api.post('/api/models/pull', { hf_model_id: id });
+            this._listenToLogs(`/ws/pull/${res.model_id}`, `Downloading ${id}`);
+        } catch (e) { alert(e.message); }
     },
 
     async scanModelsFolder() {
-        try {
-            const res = await this.api.post('/api/models/scan');
-            alert(res.message);
-            this.loadDashboard();
-        } catch (e) {
-            alert('Failed to scan models folder: ' + e.message);
-        }
+        try { await this.api.post('/api/models/scan'); alert('Scan complete'); this.loadDashboard(); } catch (e) { alert(e.message); }
     },
-
     async startModel(id) {
-        try {
-            await this.api.post(`/api/models/${id}/start`);
-            this.loadModels(); 
-            this._listenToLogs(`/ws/logs/${id}`, `Starting Model ${id}`);
-        } catch (e) {
-            alert('Failed to start model: ' + e.message);
-            this.loadModels();
-        }
+        try { await this.api.post(`/api/models/${id}/start`); this.loadModels(); this._listenToLogs(`/ws/logs/${id}`, 'Starting'); }
+        catch (e) { alert(e.message); this.loadModels(); }
     },
+    async stopModel(id) { try { await this.api.post(`/api/models/${id}/stop`); this.loadDashboard(); } catch(e){ alert(e.message); } },
+    async deleteModel(id) { if(confirm('Delete?')) try { await this.api.del(`/api/models/${id}`); this.loadDashboard(); } catch(e){ alert(e.message); } },
+    async clearError(id) { await this.api.post(`/api/models/${id}/clear_error`); this.loadDashboard(); },
+    showRuntimeLogs(id) { this._listenToLogs(`/ws/logs/${id}`, 'Logs'); },
 
-    async showRuntimeLogs(id) {
-        this._listenToLogs(`/ws/logs/${id}`, `Logs for Model ${id}`);
-    },
-
-    async stopModel(id) {
-        try {
-            await this.api.post(`/api/models/${id}/stop`);
-            this.loadDashboard();
-        } catch (e) {
-            alert('Failed to stop model: ' + e.message);
-        }
-    },
-    
-    async encryptPassword(password) {
+    async encryptPassword(pw) {
         if (!this.state.publicKey) {
             try {
-                const jwk = await this.api.get('/api/security/public-key');
-                this.state.publicKey = await window.crypto.subtle.importKey(
-                    "jwk", jwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]
-                );
-            } catch (e) { throw new Error("Encryption error"); }
+                const k = await this.api.get('/api/security/public-key');
+                this.state.publicKey = await window.crypto.subtle.importKey("jwk", k, {name:"RSA-OAEP", hash:"SHA-256"}, true, ["encrypt"]);
+            } catch (e) { throw new Error("Encryption failed"); }
         }
-        const enc = new TextEncoder().encode(password);
-        const encrypted = await window.crypto.subtle.encrypt(
-            { name: "RSA-OAEP" }, this.state.publicKey, enc
-        );
-        return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+        const enc = await window.crypto.subtle.encrypt({name:"RSA-OAEP"}, this.state.publicKey, new TextEncoder().encode(pw));
+        return btoa(String.fromCharCode(...new Uint8Array(enc)));
     },
-
     async killGpuProcess(pid) {
-        if (confirm(`Kill process ${pid}?`)) {
-            try {
-                await this.api.post(`/api/gpus/kill/${pid}`, {});
-                alert('Process killed.');
-                this.refreshStats();
-            } catch (e) {
-                if (e.message.includes('Sudo') || e.message.includes('Permission')) {
-                    const password = prompt("Permission denied. Enter sudo password:");
-                    if (password) {
-                        try {
-                             const encryptedPass = await this.encryptPassword(password);
-                             await this.api.post(`/api/gpus/kill/${pid}`, { encrypted_sudo_password: encryptedPass });
-                             alert('Process killed via sudo.');
-                             this.refreshStats();
-                        } catch (e2) {
-                            alert('Failed to kill process: ' + e2.message);
-                        }
-                    }
-                } else {
-                    alert('Failed to kill process: ' + e.message);
+        if(!confirm(`Kill ${pid}?`)) return;
+        try {
+            await this.api.post(`/api/gpus/kill/${pid}`, {});
+            alert('Killed'); this.refreshStats();
+        } catch(e) {
+            if(e.message.includes('Sudo') || e.message.includes('Permission')) {
+                const pw = prompt('Sudo password required:');
+                if(pw) {
+                    try {
+                        const enc = await this.encryptPassword(pw);
+                        await this.api.post(`/api/gpus/kill/${pid}`, {encrypted_sudo_password: enc});
+                        alert('Killed via sudo'); this.refreshStats();
+                    } catch(e2) { alert(e2.message); }
                 }
-            }
+            } else alert(e.message);
         }
     },
 
-    async deleteModel(id) {
-        if (confirm('Delete model? This is irreversible.')) {
-            try {
-                await this.api.del(`/api/models/${id}`);
-                this.loadDashboard();
-            } catch (e) {
-                alert('Failed to delete model: ' + e.message);
-            }
-        }
-    },
-
-    async clearError(id) {
+    async openEditModal(id) {
         try {
-            await this.api.post(`/api/models/${id}/clear_error`);
-            this.loadDashboard();
-        } catch (e) {
-            alert('Failed to clear error state: ' + e.message);
-        }
-    },
-
-    async upgradeVLLM() {
-        if (confirm('Upgrade vLLM?')) {
-            try {
-                await this.api.post('/api/system/upgrade');
-                this._listenToLogs('/ws/upgrade', 'Upgrading vLLM');
-            } catch (e) {
-                alert('Failed to start upgrade: ' + e.message);
-            }
-        }
-    },
-
-    togglePasswordVisibility() {
-        const passwordInput = document.getElementById('password');
-        const eyeOpen = document.getElementById('eye-open-icon');
-        const eyeClosed = document.getElementById('eye-closed-icon');
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            eyeOpen.classList.add('hidden');
-            eyeClosed.classList.remove('hidden');
-        } else {
-            passwordInput.type = 'password';
-            eyeOpen.classList.remove('hidden');
-            eyeClosed.classList.add('hidden');
-        }
-    },
-
-    async openEditModal(modelId) {
-        try {
-            const [models, gpus] = await Promise.all([
-                this.api.get('/api/models'),
-                this.api.get('/api/gpus')
-            ]);
+            const [models, gpus] = await Promise.all([this.api.get('/api/models'), this.api.get('/api/gpus')]);
+            const m = models.find(x => x.id === id);
+            if(!m) return alert('Model not found');
             
-            const model = models.find(m => m.id === modelId);
-            if (!model) {
-                alert('Model not found!');
-                return;
-            }
-
-            const gpuContainer = document.getElementById('gpu-selection-container');
-            if (gpus.length === 0) {
-                gpuContainer.innerHTML = '<span class="text-red-400 text-xs">No GPUs detected!</span>';
-            } else {
-                const currentGpuIds = (model.config.gpu_ids || "").split(',').map(s => s.trim());
-                gpuContainer.innerHTML = gpus.map(g => `
-                    <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-600 p-1 rounded">
-                        <input type="checkbox" 
-                               class="gpu-checkbox form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-500 rounded focus:ring-indigo-500" 
-                               value="${g.id}" 
-                               ${currentGpuIds.includes(String(g.id)) ? 'checked' : ''}
-                               onchange="app.updateTensorParallelFromSelection()">
-                        <span class="text-sm text-gray-200">GPU ${g.id}</span>
-                    </label>
-                `).join('');
-            }
-
-            document.getElementById('edit-model-id').value = model.id;
-            document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
-            document.getElementById('edit-gpu-ids').value = model.config.gpu_ids || '0';
-            document.getElementById('edit-gpu-mem').value = model.config.gpu_memory_utilization;
-            document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size;
-            document.getElementById('edit-max-len').value = model.config.max_model_len;
-            document.getElementById('edit-dtype').value = model.config.dtype;
-            document.getElementById('edit-quantization').value = model.config.quantization || '';
-            document.getElementById('edit-trust-remote-code').checked = model.config.trust_remote_code;
-            document.getElementById('edit-prefix-caching').checked = model.config.enable_prefix_caching;
+            document.getElementById('edit-model-id').value = m.id;
+            document.getElementById('edit-modal-title').textContent = `Edit ${m.name}`;
+            const container = document.getElementById('gpu-selection-container');
+            const cur = (m.config.gpu_ids || "").split(',');
+            container.innerHTML = gpus.length ? gpus.map(g => `<label class="flex items-center gap-2 p-1 hover:bg-gray-700 rounded cursor-pointer"><input type="checkbox" class="gpu-check" value="${g.id}" ${cur.includes(String(g.id))?'checked':''} onchange="app.calcTP()"><span class="text-sm">GPU ${g.id}</span></label>`).join('') : '<span class="text-xs text-red-400">No GPUs</span>';
             
+            document.getElementById('edit-gpu-mem').value = m.config.gpu_memory_utilization;
+            document.getElementById('edit-tensor-parallel').value = m.config.tensor_parallel_size;
+            document.getElementById('edit-max-len').value = m.config.max_model_len;
+            document.getElementById('edit-dtype').value = m.config.dtype;
+            document.getElementById('edit-quantization').value = m.config.quantization || '';
+            document.getElementById('edit-trust-remote-code').checked = m.config.trust_remote_code;
+            document.getElementById('edit-prefix-caching').checked = m.config.enable_prefix_caching;
             this.ui.showEditModal();
-            this.updateTensorParallelFromSelection();
-
-        } catch (e) {
-            alert('Could not fetch model details: ' + e.message);
-        }
+            this.calcTP();
+        } catch(e){ alert(e.message); }
     },
-
-    updateTensorParallelFromSelection() {
-        const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
-        const count = checkboxes.length;
-        const tpInput = document.getElementById('edit-tensor-parallel');
-        tpInput.value = count > 0 ? count : 1;
+    calcTP() {
+        const n = document.querySelectorAll('.gpu-check:checked').length;
+        document.getElementById('edit-tensor-parallel').value = n > 0 ? n : 1;
     },
-
     async saveModelConfig() {
-        const modelId = document.getElementById('edit-model-id').value;
-        
-        const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
-        const selectedGpuIds = Array.from(checkboxes).map(cb => cb.value).join(',');
-        
-        if (!selectedGpuIds) {
-            alert("Please select at least one GPU.");
-            return;
-        }
-
-        const config = {
-            gpu_ids: selectedGpuIds,
+        const id = document.getElementById('edit-model-id').value;
+        const gpus = Array.from(document.querySelectorAll('.gpu-check:checked')).map(c=>c.value).join(',');
+        if(!gpus) return alert('Select a GPU');
+        const cfg = {
+            gpu_ids: gpus,
             gpu_memory_utilization: parseFloat(document.getElementById('edit-gpu-mem').value),
-            tensor_parallel_size: checkboxes.length,
+            tensor_parallel_size: parseInt(document.getElementById('edit-tensor-parallel').value),
             max_model_len: parseInt(document.getElementById('edit-max-len').value),
             dtype: document.getElementById('edit-dtype').value,
             quantization: document.getElementById('edit-quantization').value || null,
             trust_remote_code: document.getElementById('edit-trust-remote-code').checked,
             enable_prefix_caching: document.getElementById('edit-prefix-caching').checked
         };
-
-        try {
-            await this.api.put(`/api/models/${modelId}/config`, config);
-            this.ui.hideEditModal();
-            this.loadModels();
-        } catch (e) {
-            alert('Failed to save configuration: ' + e.message);
-        }
+        try { await this.api.put(`/api/models/${id}/config`, cfg); this.ui.hideEditModal(); this.loadModels(); } catch(e){ alert(e.message); }
     },
 
     openBrowseModal() {
         document.getElementById('browse-modal').classList.remove('hidden');
-        const container = document.getElementById('browse-results');
-        if (!container.innerHTML.trim() || container.innerHTML.includes('Search failed') || container.innerHTML.includes('No models found')) {
-            this.loadRecommendedModels();
-        }
+        const c = document.getElementById('browse-results');
+        if (!c.innerHTML.trim() || c.innerHTML.includes('Search') || c.innerHTML.includes('No models')) this.loadRecommendedModels();
     },
-
-    hideBrowseModal() {
-        document.getElementById('browse-modal').classList.add('hidden');
-    },
-
+    hideBrowseModal() { document.getElementById('browse-modal').classList.add('hidden'); },
     async loadRecommendedModels() {
-        const container = document.getElementById('browse-results');
-        container.innerHTML = '<div class="text-center text-gray-400 mt-4">Loading recommended models...</div>';
-        
+        const c = document.getElementById('browse-results');
+        c.innerHTML = '<div class="text-center text-gray-400 mt-4">Loading recommended...</div>';
         try {
             const res = await fetch('/static/models.json');
-            if (!res.ok) throw new Error("Failed to load recommended models.");
+            if(!res.ok) throw new Error('Load failed');
             const data = await res.json();
             this.ui.renderRecommendedModels(data);
-        } catch (e) {
-             container.innerHTML = `<div class="text-center text-red-400 mt-4">Error loading recommendations: ${e.message}</div>`;
-        }
+        } catch(e) { c.innerHTML = `<div class="text-center text-red-400 mt-4">${e.message}</div>`; }
     },
-
-    async searchHub(reset = true, append = false) {
-        const query = document.getElementById('browse-search').value.trim();
-        const filter = document.getElementById('browse-filter').value;
-        const sort = document.getElementById('browse-sort').value;
+    async searchHub(reset=true, append=false) {
+        const q = document.getElementById('browse-search').value.trim();
+        const f = document.getElementById('browse-filter').value;
+        const s = document.getElementById('browse-sort').value;
+        if (!q && !f && !append) return this.loadRecommendedModels();
         
-        if (!query && !filter && !append) {
-            return this.loadRecommendedModels();
-        }
-
         if (reset) this.state.browseLimit = 20;
         if (append) this.state.browseLimit += 20;
-
-        const container = document.getElementById('browse-results');
-        if (!append) {
-            container.innerHTML = '<div class="text-center text-gray-400 mt-10"><svg class="animate-spin h-8 w-8 text-indigo-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Searching Hugging Face...</div>';
-        } else {
-            const btn = document.getElementById('load-more-btn-container');
-            if (btn) btn.innerHTML = '<span class="text-sm text-gray-400">Loading...</span>';
-        }
-
-        try {
-            const params = new URLSearchParams();
-            if (query) params.append('query', query);
-            if (filter) params.append('filter_type', filter);
-            params.append('sort', sort);
-            params.append('limit', this.state.browseLimit);
-            
-            const results = await this.api.get(`/api/hub/search?${params.toString()}`);
-            this.ui.renderHubResults(results, append);
-        } catch (e) {
-            container.innerHTML = `<div class="text-center text-red-400 mt-10">Search failed: ${e.message}</div>`;
-        }
-    },
-
-    selectModelFromHub(modelId) {
-        this.hideBrowseModal();
-        document.getElementById('hf-model-id').value = modelId;
-        if (confirm(`Pull model '${modelId}' now?`)) {
-            this.pullModel();
-        }
-    },
-
-    hideLogModal() {
-        this.ui.hideLogModal();
-    },
-
-    copyLog() {
-        this.ui.copyLog();
-    },
-    
-    saveLog() {
-        this.ui.saveLog();
-    },
-
-    hideEditModal() {
-        this.ui.hideEditModal();
-    },
-
-    async openAdminSettingsModal() {
-        try {
-            const settings = await this.api.get('/api/admin/settings');
-            this.ui.renderAdminSettings(settings);
-            this.ui.showAdminSettingsModal();
-        } catch (e) {
-            alert('Could not load admin settings: ' + e.message);
-        }
-    },
-
-    hideAdminSettingsModal() {
-        this.ui.hideAdminSettingsModal();
-    },
-
-    async changePassword() {
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-password').value;
-        const errorEl = document.getElementById('password-change-error');
         
-        if (!errorEl) return;
-        errorEl.classList.add('hidden');
-
-        if (!newPassword || newPassword !== confirmPassword) {
-            errorEl.textContent = 'New passwords do not match or are empty.';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-        if (!currentPassword) {
-            errorEl.textContent = 'Current password is required.';
-            errorEl.classList.remove('hidden');
-            return;
-        }
-
+        const c = document.getElementById('browse-results');
+        if (!append) c.innerHTML = '<div class="text-center text-gray-400 mt-10">Searching...</div>';
+        else document.getElementById('load-more-btn-container').innerHTML = 'Loading...';
+        
         try {
-            await this.api.post('/api/admin/change-password', {
-                current_password: currentPassword,
-                new_password: newPassword
-            });
-            alert('Password changed successfully!');
-            this.hideAdminSettingsModal();
-        } catch (e) {
-            errorEl.textContent = 'Failed to change password: ' + e.message;
-            errorEl.classList.remove('hidden');
-        }
-    }
+            const p = new URLSearchParams({ limit: this.state.browseLimit, sort: s });
+            if(q) p.append('query', q);
+            if(f) p.append('filter_type', f);
+            const res = await this.api.get(`/api/hub/search?${p}`);
+            this.ui.renderHubResults(res, append);
+        } catch(e) { c.innerHTML = `<div class="text-center text-red-400 mt-10">${e.message}</div>`; }
+    },
+    selectModelFromHub(id) {
+        this.hideBrowseModal();
+        document.getElementById('hf-model-id').value = id;
+        if(confirm(`Pull ${id}?`)) this.pullModel();
+    },
+
+    hideLogModal() { this.ui.hideLogModal(); },
+    copyLog() { this.ui.copyLog(); },
+    saveLog() { this.ui.saveLog(); },
+    hideEditModal() { this.ui.hideEditModal(); },
+    openAdminSettingsModal() { this.ui.showAdminSettingsModal(); this.ui.renderAdminSettings({is_password_env_managed:false}); app.api.get('/api/admin/settings').then(s => this.ui.renderAdminSettings(s)); },
+    hideAdminSettingsModal() { this.ui.hideAdminSettingsModal(); },
+    async changePassword() {
+        const c = document.getElementById('current-password').value;
+        const n = document.getElementById('new-password').value;
+        const cf = document.getElementById('confirm-password').value;
+        const err = document.getElementById('password-change-error');
+        err.classList.add('hidden');
+        if(!n || n!==cf) { err.textContent = 'Mismatch'; err.classList.remove('hidden'); return; }
+        if(!c) { err.textContent = 'Current req'; err.classList.remove('hidden'); return; }
+        try { await this.api.post('/api/admin/change-password', { current_password: c, new_password: n }); alert('Done'); this.hideAdminSettingsModal(); } catch(e){ err.textContent=e.message; err.classList.remove('hidden'); }
+    },
+    async upgradeVLLM() { if(confirm('Upgrade?')) { await this.api.post('/api/system/upgrade'); this._listenToLogs('/ws/upgrade', 'Upgrade'); } }
 };

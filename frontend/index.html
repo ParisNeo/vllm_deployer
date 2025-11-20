@@ -8,8 +8,6 @@
     <style>
         .modal-bg { background-color: rgba(0,0,0,0.5); }
         .log-pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; }
-        
-        /* Tooltip Container */
         .help-icon {
             display: inline-flex; align-items: center; justify-content: center;
             width: 16px; height: 16px; border-radius: 50%;
@@ -28,7 +26,6 @@
             content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
             border-width: 5px; border-style: solid; border-color: #1F2937 transparent transparent transparent;
         }
-
         /* ANSI colour support for log output */
         .ansi-reset { color: inherit; font-weight: normal; font-style: normal; text-decoration: none; }
         .ansi-bold { font-weight: bold; }
@@ -52,10 +49,7 @@
     </style>
 </head>
 <body class="bg-gray-900 text-gray-200">
-
-    <!-- Main Container -->
     <div id="app" class="min-h-screen">
-        
         <!-- Login View -->
         <div id="login-view" class="flex items-center justify-center min-h-screen">
             <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm">
@@ -65,14 +59,8 @@
                     <div class="relative">
                         <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="current-password">
                         <button type="button" id="toggle-password-btn" class="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-gray-200">
-                            <svg id="eye-open-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                                <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.02 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
-                            </svg>
-                             <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zM10 12a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
-                                <path d="M2 4.272l2.272 2.272A9.959 9.959 0 0010.001 3c4.478 0 8.268 2.943 9.542 7 .274.855.458 1.742.458 2.641 0 1.164-.223 2.277-.635 3.286l-2.42-2.42A4.002 4.002 0 0010 10a4 4 0 00-3.232 1.57l-1.12-1.122a2.001 2.001 0 013.163-2.13zM1.458 10C2.732 14.057 6.522 17 10 17a9.95 9.95 0 005.137-1.432l-2.072-2.072a4 4 0 01-5.59-5.59l-2.45-2.45A10.005 10.005 0 001.458 10z" />
-                            </svg>
+                            <svg id="eye-open-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" /><path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.02 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" /></svg>
+                             <svg id="eye-closed-icon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zM10 12a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /><path d="M2 4.272l2.272 2.272A9.959 9.959 0 0010.001 3c4.478 0 8.268 2.943 9.542 7 .274.855.458 1.742.458 2.641 0 1.164-.223 2.277-.635 3.286l-2.42-2.42A4.002 4.002 0 0010 10a4 4 0 00-3.232 1.57l-1.12-1.122a2.001 2.001 0 013.163-2.13zM1.458 10C2.732 14.057 6.522 17 10 17a9.95 9.95 0 005.137-1.432l-2.072-2.072a4 4 0 01-5.59-5.59l-2.45-2.45A10.005 10.005 0 001.458 10z" /></svg>
                         </button>
                     </div>
                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Login</button>
@@ -105,10 +93,7 @@
                 <div class="mb-8">
                     <h2 class="text-2xl font-bold mb-4 flex items-center">
                         GPU Status
-                        <span class="tooltip-container ml-2">
-                            <span class="help-icon">?</span>
-                            <span class="tooltip-text">Real-time GPU monitoring. Use 'Kill' to force stop rogue processes blocking VRAM.</span>
-                        </span>
+                        <span class="tooltip-container ml-2"><span class="help-icon">?</span><span class="tooltip-text">Real-time GPU monitoring. Use 'Kill' to force stop rogue processes.</span></span>
                     </h2>
                     <div id="gpu-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
                 </div>
@@ -119,9 +104,7 @@
                     <div class="bg-gray-800 p-6 rounded-lg shadow-lg lg:col-span-2">
                         <h3 class="text-lg font-semibold mb-4">Pull New Model</h3>
                         <div class="flex space-x-2">
-                            <button onclick="app.openBrowseModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex-shrink-0">
-                                Browse Hub
-                            </button>
+                            <button onclick="app.openBrowseModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex-shrink-0">Browse Hub</button>
                             <input id="hf-model-id" placeholder="Or enter Model ID (e.g., facebook/opt-125m)" class="flex-grow px-4 py-2 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
                             <button onclick="app.pullModel()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Pull</button>
                         </div>
@@ -134,9 +117,8 @@
                         <h2 class="text-2xl font-bold">Managed Models</h2>
                         <div class="flex items-center gap-2">
                             <select id="model-sort" onchange="app.loadModels()" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2">
-                                <option value="date_desc">Date Added (Newest)</option>
-                                <option value="date_asc">Date Added (Oldest)</option>
-                                <option value="name_asc">Alphabetical (A-Z)</option>
+                                <option value="date_desc">Newest Added</option>
+                                <option value="name_asc">Alphabetical</option>
                                 <option value="size_desc">Size (Largest)</option>
                                 <option value="size_asc">Size (Smallest)</option>
                                 <option value="type">Model Type</option>
@@ -156,194 +138,60 @@
         <!-- Modals -->
         <div id="log-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-full max-h-[80vh] flex flex-col">
-                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 id="log-modal-title" class="text-lg font-semibold">Logs</h3>
-                    <button onclick="app.hideLogModal()" class="text-gray-400 hover:text-white">&times;</button>
-                </div>
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center"><h3 id="log-modal-title" class="text-lg font-semibold">Logs</h3><button onclick="app.hideLogModal()" class="text-gray-400 hover:text-white">&times;</button></div>
                 <pre id="log-pre" class="p-4 flex-grow overflow-y-auto text-sm log-pre bg-gray-900"></pre>
-                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
-                    <button onclick="app.copyLog()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Copy Log</button>
-                    <button onclick="app.saveLog()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Log</button>
-                </div>
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2"><button onclick="app.copyLog()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Copy</button><button onclick="app.saveLog()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button></div>
             </div>
         </div>
         
         <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl my-8">
-                <div class="p-4 border-b border-gray-700">
-                    <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
-                </div>
+                <div class="p-4 border-b border-gray-700"><h3 id="edit-modal-title" class="text-lg font-semibold">Edit Configuration</h3></div>
                 <form id="edit-form" class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <input type="hidden" id="edit-model-id">
-                    
                      <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-300 mb-2 flex items-center">
-                            Select GPUs
-                             <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Check the GPUs you want to use. The Tensor Parallel Size will be automatically set to the number of GPUs selected.</span>
-                            </span>
-                        </label>
-                        <div id="gpu-selection-container" class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-700 p-3 rounded-md border border-gray-600">
-                            <span class="text-xs text-gray-400">Loading GPUs...</span>
-                        </div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Select GPUs <span class="text-xs text-gray-400">(Auto-sets Tensor Parallel)</span></label>
+                        <div id="gpu-selection-container" class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-700 p-3 rounded-md border border-gray-600"><span class="text-xs text-gray-400">Loading...</span></div>
                         <input type="hidden" id="edit-gpu-ids">
                     </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            GPU Memory Utilization
-                            <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Fraction of GPU memory to use (0.1 - 1.0). Lower this if you get OOM errors.</span>
-                            </span>
-                        </label>
-                        <input type="number" step="0.01" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-                    </div>
-
-                     <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Tensor Parallel Size
-                            <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Number of GPUs to split the model across. Auto-updates based on your GPU selection.</span>
-                            </span>
-                        </label>
-                        <input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" readonly title="Auto-set based on GPU selection">
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Max Model Length
-                            <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Maximum context length (tokens). Decrease this if you run out of memory.</span>
-                            </span>
-                        </label>
-                        <input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-                    </div>
-
-                     <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Datatype
-                            <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Weight precision. 'auto' is usually best. Use 'float16' for older GPUs.</span>
-                            </span>
-                        </label>
-                        <select id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-                            <option value="auto">auto</option>
-                            <option value="float16">float16</option>
-                            <option value="bfloat16">bfloat16</option>
-                            <option value="float32">float32</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 flex items-center">
-                            Quantization
-                            <span class="tooltip-container">
-                                <span class="help-icon">?</span>
-                                <span class="tooltip-text">Compression method. Must match your model file (e.g., 'awq' for AWQ models).</span>
-                            </span>
-                        </label>
-                        <select id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md">
-                            <option value="">None (No Quantization)</option>
-                            <option value="awq">AWQ</option>
-                            <option value="gptq">GPTQ</option>
-                            <option value="squeezellm">SqueezeLLM</option>
-                            <option value="fp8">FP8 (W8A8)</option>
-                            <option value="bitsandbytes">BitsAndBytes (int8/nf4)</option>
-                            <option value="gguf">GGUF (Experimental)</option>
-                            <option value="fbgemm_fp8">FBGEMM FP8</option>
-                            <option value="marlin">Marlin</option>
-                        </select>
-                    </div>
-
+                    <div><label class="block text-sm font-medium text-gray-300">GPU Mem Util</label><input type="number" step="0.01" min="0.1" max="1.0" id="edit-gpu-mem" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"></div>
+                     <div><label class="block text-sm font-medium text-gray-300">Tensor Parallel</label><input type="number" step="1" min="1" id="edit-tensor-parallel" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" readonly></div>
+                    <div><label class="block text-sm font-medium text-gray-300">Max Length</label><input type="number" step="256" min="256" id="edit-max-len" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"></div>
+                     <div><label class="block text-sm font-medium text-gray-300">Datatype</label><select id="edit-dtype" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"><option value="auto">auto</option><option value="float16">float16</option><option value="bfloat16">bfloat16</option></select></div>
+                    <div><label class="block text-sm font-medium text-gray-300">Quantization</label><select id="edit-quantization" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md"><option value="">None</option><option value="awq">AWQ</option><option value="gptq">GPTQ</option><option value="fp8">FP8</option><option value="bitsandbytes">BitsAndBytes</option><option value="gguf">GGUF</option></select></div>
                     <div class="md:col-span-2 flex flex-col space-y-3 bg-gray-700/30 p-3 rounded">
-                         <div class="flex items-center">
-                            <input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
-                            <label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300 flex items-center">
-                                Trust Remote Code
-                                <span class="tooltip-container">
-                                    <span class="help-icon">?</span>
-                                    <span class="tooltip-text">Allow model execution code. Required for some new model architectures.</span>
-                                </span>
-                            </label>
-                        </div>
-                         <div class="flex items-center">
-                            <input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 bg-gray-700 border-gray-600 rounded text-indigo-600 focus:ring-indigo-500">
-                            <label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300 flex items-center">
-                                Enable Prefix Caching
-                                <span class="tooltip-container">
-                                    <span class="help-icon">?</span>
-                                    <span class="tooltip-text">Reuses KV cache for common prefixes. speeds up multi-turn chat significantly.</span>
-                                </span>
-                            </label>
-                        </div>
+                         <div class="flex items-center"><input id="edit-trust-remote-code" type="checkbox" class="h-4 w-4 rounded"><label for="edit-trust-remote-code" class="ml-2 block text-sm text-gray-300">Trust Remote Code</label></div>
+                         <div class="flex items-center"><input id="edit-prefix-caching" type="checkbox" class="h-4 w-4 rounded"><label for="edit-prefix-caching" class="ml-2 block text-sm text-gray-300">Enable Prefix Caching</label></div>
                     </div>
                 </form>
-                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
-                    <button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button>
-                    <button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save Changes</button>
-                </div>
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2"><button onclick="app.hideEditModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Cancel</button><button onclick="app.saveModelConfig()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button></div>
             </div>
         </div>
 
-        <!-- Admin Settings Modal -->
         <div id="admin-settings-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
-                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold">Admin Settings</h3>
-                    <button onclick="app.hideAdminSettingsModal()" class="text-gray-400 hover:text-white">&times;</button>
-                </div>
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center"><h3 class="text-lg font-semibold">Admin Settings</h3><button onclick="app.hideAdminSettingsModal()" class="text-gray-400 hover:text-white">&times;</button></div>
                 <div id="admin-settings-content" class="p-6"></div>
-                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2">
-                     <button onclick="app.hideAdminSettingsModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Close</button>
-                     <button id="save-admin-settings-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button>
-                </div>
+                <div class="p-4 bg-gray-700/50 flex justify-end space-x-2"><button onclick="app.hideAdminSettingsModal()" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md">Close</button><button id="save-admin-settings-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md">Save</button></div>
             </div>
         </div>
 
-        <!-- New Browse Modal -->
         <div id="browse-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden">
             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col">
-                <div class="p-4 border-b border-gray-700 flex justify-between items-center">
-                    <h3 class="text-lg font-semibold">Browse Hugging Face Models</h3>
-                    <button onclick="app.hideBrowseModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
-                </div>
+                <div class="p-4 border-b border-gray-700 flex justify-between items-center"><h3 class="text-lg font-semibold">Browse Hugging Face Models</h3><button onclick="app.hideBrowseModal()" class="text-gray-400 hover:text-white text-xl">&times;</button></div>
                 <div class="p-4 bg-gray-700 space-y-4 border-b border-gray-600">
                      <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
-                         <div class="flex-grow">
-                            <input id="browse-search" type="text" placeholder="Search models (e.g., llama 3, mistral)" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onkeyup="if(event.key === 'Enter') app.searchHub()">
-                         </div>
-                         <div class="w-full sm:w-40">
-                             <select id="browse-filter" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onchange="app.searchHub(true)">
-                                 <option value="">All Types</option>
-                                 <option value="awq">AWQ</option>
-                                 <option value="gptq">GPTQ</option>
-                                 <option value="gguf">GGUF</option>
-                             </select>
-                         </div>
-                         <div class="w-full sm:w-40">
-                             <select id="browse-sort" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onchange="app.searchHub(true)">
-                                 <option value="downloads">Downloads</option>
-                                 <option value="likes">Likes</option>
-                                 <option value="createdAt">Newest</option>
-                                 <option value="modified">Recently Updated</option>
-                             </select>
-                         </div>
+                         <div class="flex-grow"><input id="browse-search" type="text" placeholder="Search models (e.g., llama 3)" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md text-white" onkeyup="if(event.key === 'Enter') app.searchHub()"></div>
+                         <div class="w-full sm:w-40"><select id="browse-filter" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md text-white" onchange="app.searchHub(true)"><option value="">All Types</option><option value="awq">AWQ</option><option value="gptq">GPTQ</option><option value="fp8">FP8</option><option value="gguf">GGUF</option></select></div>
+                         <div class="w-full sm:w-40"><select id="browse-sort" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md text-white" onchange="app.searchHub(true)"><option value="downloads">Downloads</option><option value="likes">Likes</option><option value="createdAt">Newest</option></select></div>
                          <button onclick="app.searchHub()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md transition flex-shrink-0">Search</button>
                      </div>
                 </div>
-                <div id="browse-results" class="flex-grow overflow-y-auto p-4 space-y-2 bg-gray-900">
-                    <div class="text-center text-gray-400 mt-10">Search for models above or verify availability.</div>
-                </div>
+                <div id="browse-results" class="flex-grow overflow-y-auto p-4 space-y-2 bg-gray-900"><div class="text-center text-gray-400 mt-10">Search for models above.</div></div>
             </div>
         </div>
-
     </div>
-
-    <script src="/static/script.js"></script>
+    <!-- Version query param forces reload -->
+    <script src="/static/script.js?v=3.5"></script>
 </body>
 </html>
