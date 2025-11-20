@@ -1,0 +1,65 @@
+{
+  "Featured": [
+    {
+      "id": "meta-llama/Llama-3.1-8B-Instruct",
+      "name": "Llama 3.1 8B",
+      "desc": "Latest SOTA 8B model from Meta. Excellent general purpose instruction follower."
+    },
+    {
+      "id": "Qwen/Qwen2.5-7B-Instruct",
+      "name": "Qwen 2.5 7B",
+      "desc": "Top-tier 7B model with exceptional reasoning, math, and coding capabilities."
+    },
+    {
+      "id": "mistralai/Mistral-Nemo-Instruct-2407",
+      "name": "Mistral Nemo 12B",
+      "desc": "12B parameter model by Mistral & NVIDIA. Large context, fits on 24GB VRAM."
+    }
+  ],
+  "Vision Language (VLM)": [
+    {
+      "id": "Qwen/Qwen2-VL-7B-Instruct",
+      "name": "Qwen2-VL 7B",
+      "desc": "Advanced vision-language model. Reads images, charts, and video frames."
+    },
+    {
+      "id": "mistralai/Pixtral-12B-2409",
+      "name": "Pixtral 12B",
+      "desc": "Multimodal version of Mistral Nemo. Strong image reasoning."
+    },
+    {
+      "id": "openbmb/MiniCPM-V-2_6",
+      "name": "MiniCPM-V 2.6",
+      "desc": "Efficient 8B vision model with GPT-4V level performance on some benchmarks."
+    }
+  ],
+  "Enterprise & Research": [
+    {
+      "id": "ibm-granite/granite-3.0-8b-instruct",
+      "name": "IBM Granite 3.0 8B",
+      "desc": "Enterprise-focused model from IBM. Apache 2.0, optimized for business data."
+    },
+    {
+      "id": "THUDM/glm-4-9b-chat",
+      "name": "GLM-4 9B",
+      "desc": "Powerful open-weights model from THUDM with strong multi-turn capabilities."
+    },
+    {
+      "id": "google/gemma-2-9b-it",
+      "name": "Gemma 2 9B",
+      "desc": "Google's lightweight open model. High performance to size ratio."
+    }
+  ],
+  "Coding": [
+    {
+      "id": "Qwen/Qwen2.5-Coder-7B-Instruct",
+      "name": "Qwen 2.5 Coder 7B",
+      "desc": "Specialized for coding tasks. State-of-the-art for its size."
+    },
+    {
+      "id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+      "name": "DeepSeek Coder V2 Lite",
+      "desc": "16B MoE model (activates ~2.4B). Excellent at varied programming languages."
+    }
+  ]
+}
