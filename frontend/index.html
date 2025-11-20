@@ -130,12 +130,23 @@
 
                 <!-- Models List -->
                 <div>
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                         <h2 class="text-2xl font-bold">Managed Models</h2>
-                        <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 11h5v5H4v-5zm11-11h5v5h-5V4zm0 11h5v5h-5v-5z" /></svg>
-                            <span>Scan Folder</span>
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <select id="model-sort" onchange="app.loadModels()" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-2">
+                                <option value="date_desc">Date Added (Newest)</option>
+                                <option value="date_asc">Date Added (Oldest)</option>
+                                <option value="name_asc">Alphabetical (A-Z)</option>
+                                <option value="size_desc">Size (Largest)</option>
+                                <option value="size_asc">Size (Smallest)</option>
+                                <option value="type">Model Type</option>
+                                <option value="quant">Quantization</option>
+                            </select>
+                            <button onclick="app.scanModelsFolder()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 flex items-center space-x-2 text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5V4H4zm0 11h5v5H4v-5zm11-11h5v5h-5V4zm0 11h5v5h-5v-5z" /></svg>
+                                <span>Scan Folder</span>
+                            </button>
+                        </div>
                     </div>
                     <div id="model-list" class="space-y-4"></div>
                 </div>
@@ -158,8 +169,7 @@
         </div>
         
         <div id="edit-modal" class="fixed inset-0 modal-bg z-50 flex items-center justify-center p-4 hidden overflow-y-auto">
-            <!-- Edit Modal Content (Same as before) -->
-             <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl my-8">
+            <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl my-8">
                 <div class="p-4 border-b border-gray-700">
                     <h3 id="edit-modal-title" class="text-lg font-semibold">Edit Model Configuration</h3>
                 </div>
@@ -303,19 +313,27 @@
                     <button onclick="app.hideBrowseModal()" class="text-gray-400 hover:text-white text-xl">&times;</button>
                 </div>
                 <div class="p-4 bg-gray-700 space-y-4 border-b border-gray-600">
-                     <div class="flex space-x-4">
+                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
                          <div class="flex-grow">
                             <input id="browse-search" type="text" placeholder="Search models (e.g., llama 3, mistral)" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onkeyup="if(event.key === 'Enter') app.searchHub()">
                          </div>
-                         <div class="w-48">
-                             <select id="browse-filter" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onchange="app.searchHub()">
+                         <div class="w-full sm:w-40">
+                             <select id="browse-filter" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onchange="app.searchHub(true)">
                                  <option value="">All Types</option>
-                                 <option value="awq">AWQ (Quantized)</option>
-                                 <option value="gptq">GPTQ (Quantized)</option>
-                                 <option value="gguf">GGUF (Experimental)</option>
+                                 <option value="awq">AWQ</option>
+                                 <option value="gptq">GPTQ</option>
+                                 <option value="gguf">GGUF</option>
                              </select>
                          </div>
-                         <button onclick="app.searchHub()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md transition">Search</button>
+                         <div class="w-full sm:w-40">
+                             <select id="browse-sort" class="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white" onchange="app.searchHub(true)">
+                                 <option value="downloads">Downloads</option>
+                                 <option value="likes">Likes</option>
+                                 <option value="createdAt">Newest</option>
+                                 <option value="modified">Recently Updated</option>
+                             </select>
+                         </div>
+                         <button onclick="app.searchHub()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md transition flex-shrink-0">Search</button>
                      </div>
                 </div>
                 <div id="browse-results" class="flex-grow overflow-y-auto p-4 space-y-2 bg-gray-900">
