@@ -1,65 +1,88 @@
+```json
 {
-  "Featured": [
+  "Featured (SOTA 2025)": [
     {
-      "id": "meta-llama/Llama-3.1-8B-Instruct",
-      "name": "Llama 3.1 8B",
-      "desc": "Latest SOTA 8B model from Meta. Excellent general purpose instruction follower."
+      "id": "google/gemma-3-27b-it",
+      "name": "Gemma 3 27B",
+      "desc": "Google's flagship open model. 128k context, multimodal (text/image), rivals GPT-4o."
     },
     {
-      "id": "Qwen/Qwen2.5-7B-Instruct",
-      "name": "Qwen 2.5 7B",
-      "desc": "Top-tier 7B model with exceptional reasoning, math, and coding capabilities."
+      "id": "Qwen/Qwen3-72B-Instruct",
+      "name": "Qwen 3 72B",
+      "desc": "Alibaba's latest beast. Exceptional reasoning & coding. The new open-weight king."
     },
     {
-      "id": "mistralai/Mistral-Nemo-Instruct-2407",
-      "name": "Mistral Nemo 12B",
-      "desc": "12B parameter model by Mistral & NVIDIA. Large context, fits on 24GB VRAM."
+      "id": "meta-llama/Llama-3.3-70B-Instruct",
+      "name": "Llama 3.3 70B",
+      "desc": "Meta's refined 70B model. Multilingual, stronger reasoning, and highly efficient."
+    },
+    {
+      "id": "mistralai/Mistral-Large-2411",
+      "name": "Mistral Large 2 (Nov 2025)",
+      "desc": "Latest dense model from Mistral. 123B parameters, top-tier reasoning and RAG."
     }
   ],
-  "Vision Language (VLM)": [
+  "Reasoning & Thinking": [
     {
-      "id": "Qwen/Qwen2-VL-7B-Instruct",
-      "name": "Qwen2-VL 7B",
-      "desc": "Advanced vision-language model. Reads images, charts, and video frames."
+      "id": "deepseek-ai/DeepSeek-V3",
+      "name": "DeepSeek V3",
+      "desc": "671B MoE model (37B active). massive scale, efficient inference, strong math/code."
     },
     {
-      "id": "mistralai/Pixtral-12B-2409",
-      "name": "Pixtral 12B",
-      "desc": "Multimodal version of Mistral Nemo. Strong image reasoning."
-    },
-    {
-      "id": "openbmb/MiniCPM-V-2_6",
-      "name": "MiniCPM-V 2.6",
-      "desc": "Efficient 8B vision model with GPT-4V level performance on some benchmarks."
+      "id": "moonshotai/Kimi-k2-thinking",
+      "name": "Kimi K2 Thinking",
+      "desc": "Specialized reasoning model with 'Chain of Thought' capabilities enabled by default."
     }
   ],
-  "Enterprise & Research": [
+  "Vision & Multimodal": [
+    {
+      "id": "Qwen/Qwen3-VL-7B-Instruct",
+      "name": "Qwen3-VL 7B",
+      "desc": "SOTA vision-language model. Handles video, charts, and complex visual reasoning."
+    },
+    {
+      "id": "meta-llama/Llama-3.2-90B-Vision-Instruct",
+      "name": "Llama 3.2 90B Vision",
+      "desc": "The heavy hitter for image reasoning from Meta. Drop-in replacement for text models."
+    },
+    {
+      "id": "openbmb/MiniCPM-V-3_0",
+      "name": "MiniCPM-V 3.0",
+      "desc": "Edge-optimized vision model. Outperforms GPT-4V on mobile-class hardware."
+    }
+  ],
+  "Efficient & Edge": [
+    {
+      "id": "google/gemma-3-4b-it",
+      "name": "Gemma 3 4B",
+      "desc": "Highly capable small model. Perfect for local consumer GPUs (8GB VRAM)."
+    },
+    {
+      "id": "meta-llama/Llama-3.2-3B-Instruct",
+      "name": "Llama 3.2 3B",
+      "desc": "The standard for edge AI. 128k context, fast, and reliable for simple tasks."
+    },
+    {
+      "id": "Qwen/Qwen3-1.5B-Instruct",
+      "name": "Qwen 3 1.5B",
+      "desc": "Tiny but mighty. Great for speculative decoding or extreme edge constraints."
+    }
+  ],
+  "Coding & Enterprise": [
     {
       "id": "ibm-granite/granite-3.0-8b-instruct",
       "name": "IBM Granite 3.0 8B",
-      "desc": "Enterprise-focused model from IBM. Apache 2.0, optimized for business data."
+      "desc": "Enterprise-grade, Apache 2.0. Optimized for RAG, tool use, and business data."
     },
     {
-      "id": "THUDM/glm-4-9b-chat",
-      "name": "GLM-4 9B",
-      "desc": "Powerful open-weights model from THUDM with strong multi-turn capabilities."
+      "id": "Qwen/Qwen2.5-Coder-32B-Instruct",
+      "name": "Qwen 2.5 Coder 32B",
+      "desc": "Dedicated coding specialist. Rivals Claude 3.5 Sonnet in coding benchmarks."
     },
     {
-      "id": "google/gemma-2-9b-it",
-      "name": "Gemma 2 9B",
-      "desc": "Google's lightweight open model. High performance to size ratio."
-    }
-  ],
-  "Coding": [
-    {
-      "id": "Qwen/Qwen2.5-Coder-7B-Instruct",
-      "name": "Qwen 2.5 Coder 7B",
-      "desc": "Specialized for coding tasks. State-of-the-art for its size."
-    },
-    {
-      "id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
-      "name": "DeepSeek Coder V2 Lite",
-      "desc": "16B MoE model (activates ~2.4B). Excellent at varied programming languages."
+      "id": "openai/GPT-OSS-20B",
+      "name": "GPT-OSS 20B",
+      "desc": "OpenAI's open-weight entry. Fast, robust, and optimized for agentic workflows."
     }
   ]
 }

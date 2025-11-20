@@ -51,7 +51,7 @@ const app = {
 
     ui: {
         // ----------------------------------------
-        // Safely show/hide main views (login vs dashboard)
+        // View Switching
         // ----------------------------------------
         showView(viewId) {
             const idsToHide = ['login-view', 'dashboard-view'];
@@ -64,7 +64,7 @@ const app = {
         },
 
         // ----------------------------------------
-        // ANSI → HTML conversion (preserves colours in log output)
+        // ANSI -> HTML (Log Colors)
         // ----------------------------------------
         ansiToHtml(text) {
             const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({
@@ -78,29 +78,17 @@ const app = {
                 0: 'ansi-reset',
                 1: 'ansi-bold',
                 4: 'ansi-underline',
-                30: 'ansi-black',
-                31: 'ansi-red',
-                32: 'ansi-green',
-                33: 'ansi-yellow',
-                34: 'ansi-blue',
-                35: 'ansi-magenta',
-                36: 'ansi-cyan',
-                37: 'ansi-white',
-                90: 'ansi-bright-black',
-                91: 'ansi-bright-red',
-                92: 'ansi-bright-green',
-                93: 'ansi-bright-yellow',
-                94: 'ansi-bright-blue',
-                95: 'ansi-bright-magenta',
-                96: 'ansi-bright-cyan',
-                97: 'ansi-bright-white'
+                30: 'ansi-black', 31: 'ansi-red', 32: 'ansi-green', 33: 'ansi-yellow',
+                34: 'ansi-blue', 35: 'ansi-magenta', 36: 'ansi-cyan', 37: 'ansi-white',
+                90: 'ansi-bright-black', 91: 'ansi-bright-red', 92: 'ansi-bright-green', 93: 'ansi-bright-yellow',
+                94: 'ansi-bright-blue', 95: 'ansi-bright-magenta', 96: 'ansi-bright-cyan', 97: 'ansi-bright-white'
             };
 
             let result = '';
             let lastIndex = 0;
             const stack = [];
-
             let match;
+
             while ((match = ansiRegex.exec(escaped)) !== null) {
                 const index = match.index;
                 const codes = match[1].split(';').map(Number);
@@ -116,10 +104,7 @@ const app = {
                     continue;
                 }
 
-                const classes = codes
-                    .map(code => sgrMap[code])
-                    .filter(Boolean);
-
+                const classes = codes.map(code => sgrMap[code]).filter(Boolean);
                 if (classes.length) {
                     result += `<span class="${classes.join(' ')}">`;
                     stack.push('</span>');
@@ -128,12 +113,11 @@ const app = {
 
             result += escaped.substring(lastIndex);
             while (stack.length) result += stack.pop();
-
             return result;
         },
 
         // ----------------------------------------
-        // Log handling
+        // Log Modal
         // ----------------------------------------
         showLogModal(title) {
             const titleEl = document.getElementById('log-modal-title');
@@ -157,65 +141,117 @@ const app = {
             pre.innerHTML += app.ui.ansiToHtml(text);
             pre.scrollTop = pre.scrollHeight;
         },
-        
         copyLog() {
             const pre = document.getElementById('log-pre');
             if (!pre) return;
-            navigator.clipboard.writeText(pre.innerText).then(() => alert('Log copied.'));
+            const text = pre.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Log copied to clipboard.');
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('Log copied (fallback).');
+                } catch (err) {
+                    alert('Copy failed.');
+                }
+                document.body.removeChild(textarea);
+            });
         },
-        
         saveLog() {
             const pre = document.getElementById('log-pre');
             if (!pre) return;
-            const blob = new Blob([pre.innerText], { type: 'text/plain' });
+            const text = pre.innerText;
+            const blob = new Blob([text], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `vllm-log-${new Date().toISOString()}.txt`;
+            a.download = `vllm-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
             document.body.appendChild(a);
             a.click();
-            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 0);
         },
 
         // ----------------------------------------
-        // Modal Helpers
+        // Edit & Admin Modals
         // ----------------------------------------
-        showEditModal() { document.getElementById('edit-modal').classList.remove('hidden'); },
-        hideEditModal() { document.getElementById('edit-modal').classList.add('hidden'); },
-        showAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.remove('hidden'); },
-        hideAdminSettingsModal() { document.getElementById('admin-settings-modal').classList.add('hidden'); },
+        showEditModal() {
+            document.getElementById('edit-modal').classList.remove('hidden');
+        },
+        hideEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        },
+        showAdminSettingsModal() {
+            document.getElementById('admin-settings-modal').classList.remove('hidden');
+        },
+        hideAdminSettingsModal() {
+            document.getElementById('admin-settings-modal').classList.add('hidden');
+        },
 
         renderAdminSettings(settings) {
             const contentEl = document.getElementById('admin-settings-content');
-            if (!contentEl) return;
-            // ... (Simplified for brevity, same logic as before) ...
-             let html = `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
-             if (settings.is_password_env_managed) {
-                html += `<div class="text-yellow-400 text-sm mb-4">Password managed by env var.</div>`;
-             } else {
+            const saveBtn = document.getElementById('save-admin-settings-btn');
+            if (!contentEl || !saveBtn) return;
+
+            let html = `<h4 class="text-md font-semibold mb-4">Change Password</h4>`;
+
+            if (settings.is_password_env_managed) {
+                html += `<div class="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded relative" role="alert">
+                            <strong class="font-bold">Notice:</strong>
+                            <span class="block sm:inline"> The admin password is set via an environment variable and cannot be changed from the UI.</span>
+                         </div>`;
+                saveBtn.disabled = true;
+                saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                if (settings.is_using_default_password) {
+                    html += `<div class="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded relative mb-4" role="alert">
+                                <strong class="font-bold">Security Alert:</strong>
+                                <span class="block sm:inline"> You are using the default password. Please change it immediately.</span>
+                             </div>`;
+                }
                 html += `<form id="change-password-form" class="space-y-4">
-                            <input type="password" id="current-password" placeholder="Current Password" class="w-full px-3 py-2 bg-gray-700 rounded">
-                            <input type="password" id="new-password" placeholder="New Password" class="w-full px-3 py-2 bg-gray-700 rounded">
-                            <input type="password" id="confirm-password" placeholder="Confirm New" class="w-full px-3 py-2 bg-gray-700 rounded">
+                            <div>
+                                <label for="current-password" class="block text-sm font-medium text-gray-300">Current Password</label>
+                                <input type="password" id="current-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="current-password">
+                            </div>
+                            <div>
+                                <label for="new-password" class="block text-sm font-medium text-gray-300">New Password</label>
+                                <input type="password" id="new-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="new-password">
+                            </div>
+                            <div>
+                                <label for="confirm-password" class="block text-sm font-medium text-gray-300">Confirm New Password</label>
+                                <input type="password" id="confirm-password" class="mt-1 w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md" autocomplete="new-password">
+                            </div>
                             <p id="password-change-error" class="text-red-400 text-sm hidden"></p>
                          </form>`;
-             }
-             contentEl.innerHTML = html;
-             const saveBtn = document.getElementById('save-admin-settings-btn');
-             saveBtn.disabled = settings.is_password_env_managed;
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            contentEl.innerHTML = html;
         },
 
+        // ----------------------------------------
+        // Dashboard Renderers
+        // ----------------------------------------
         renderModelList(models) {
             const listEl = document.getElementById('model-list');
             if (!listEl) return;
             if (models.length === 0) {
-                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model to get started.</div>`;
+                listEl.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No models found. Pull a new model or scan the models folder to get started.</div>`;
                 return;
             }
             listEl.innerHTML = models.map(m => {
                 const statusMap = {
                     running: `<span class="bg-green-600 text-white">Running on port ${m.port}</span>`,
-                    starting: `<span class="bg-blue-600 text-white">Starting...</span>`,
+                    starting: `<span class="bg-blue-600 text-white flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Starting...</span>`,
                     error: `<span class="bg-red-600 text-white" title="${m.error_message || ''}">Error</span>`,
                     completed: `<span class="bg-yellow-600 text-white">${m.download_status}</span>`
                 };
@@ -249,7 +285,8 @@ const app = {
             if (!el) return;
             el.innerHTML = `
                 <h3 class="text-lg font-semibold mb-2">System Information</h3>
-                <p class="text-sm">vLLM: <strong class="text-indigo-400">${info.vllm_version}</strong></p>
+                <p class="text-sm">vLLM Version: <strong class="text-indigo-400">${info.vllm_version}</strong></p>
+                <p class="text-sm">Mode: <strong class="text-indigo-400">${info.dev_mode ? 'Development' : 'Stable'}</strong></p>
                 <button onclick="app.upgradeVLLM()" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Upgrade vLLM</button>
             `;
         },
@@ -259,19 +296,19 @@ const app = {
             if (!el) return;
             el.innerHTML = `
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">CPU</h4>
+                    <h4 class="text-sm font-medium text-gray-400">CPU Usage</h4>
                     <p class="text-2xl font-bold">${stats.system_cpu_percent.toFixed(1)}%</p>
                 </div>
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">RAM</h4>
+                    <h4 class="text-sm font-medium text-gray-400">RAM Usage</h4>
                     <p class="text-2xl font-bold">${stats.system_memory_percent.toFixed(1)}%</p>
                 </div>
                 <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">Running</h4>
+                    <h4 class="text-sm font-medium text-gray-400">Running Models</h4>
                     <p class="text-2xl font-bold">${stats.running_models}</p>
                 </div>
                  <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
-                    <h4 class="text-sm font-medium text-gray-400">Total</h4>
+                    <h4 class="text-sm font-medium text-gray-400">Total Models</h4>
                     <p class="text-2xl font-bold">${stats.total_models}</p>
                 </div>
             `;
@@ -281,14 +318,14 @@ const app = {
             const el = document.getElementById('gpu-list');
             if (!el) return;
             if (!gpus || gpus.length === 0) {
-                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected.</div>`;
+                el.innerHTML = `<div class="bg-gray-800 p-6 rounded-lg text-center text-gray-400">No GPUs detected or unable to fetch stats.</div>`;
                 return;
             }
             el.innerHTML = gpus.map(gpu => {
                 const processListHtml = gpu.processes.map(p => {
                     const isManaged = p.managed_model_id !== null;
                     const actionBtn = isManaged 
-                        ? `<button onclick="app.stopModel(${p.managed_model_id})" class="bg-yellow-600 hover:bg-yellow-700 text-xs text-white font-bold py-1 px-2 rounded">Stop</button>`
+                        ? `<button onclick="app.stopModel(${p.managed_model_id})" class="bg-yellow-600 hover:bg-yellow-700 text-xs text-white font-bold py-1 px-2 rounded">Stop (Managed)</button>`
                         : `<button onclick="app.killGpuProcess(${p.pid})" class="bg-red-600 hover:bg-red-700 text-xs text-white font-bold py-1 px-2 rounded">Kill</button>`;
                     
                     return `
@@ -311,16 +348,16 @@ const app = {
                     </div>
                     <div class="mb-2">
                         <div class="flex justify-between text-xs mb-1">
-                            <span>Mem: ${(gpu.memory_used_mb / 1024).toFixed(1)} / ${(gpu.memory_total_mb / 1024).toFixed(1)} GB</span>
-                            <span>${gpu.utilization_percent.toFixed(0)}%</span>
+                            <span>Memory: ${(gpu.memory_used_mb / 1024).toFixed(2)} / ${(gpu.memory_total_mb / 1024).toFixed(2)} GB</span>
+                            <span>Util: ${gpu.utilization_percent.toFixed(0)}%</span>
                         </div>
                         <div class="w-full bg-gray-700 rounded-full h-2.5">
                             <div class="bg-indigo-600 h-2.5 rounded-full" style="width: ${((gpu.memory_used_mb / gpu.memory_total_mb) * 100).toFixed(0)}%"></div>
                         </div>
                     </div>
                     <div class="mt-3">
-                        <h5 class="text-xs text-gray-400 mb-1">Processes:</h5>
-                        ${processListHtml || '<div class="text-sm text-gray-500 italic">None</div>'}
+                        <h5 class="text-xs text-gray-400 mb-1">Running Processes:</h5>
+                        ${processListHtml || '<div class="text-sm text-gray-500 italic">No processes detected</div>'}
                     </div>
                 </div>
                 `;
@@ -331,7 +368,7 @@ const app = {
             const container = document.getElementById('browse-results');
             if (!container) return;
             if (!results || results.length === 0) {
-                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No models found.</div>';
+                container.innerHTML = '<div class="text-center text-gray-400 mt-10">No models found matching your criteria.</div>';
                 return;
             }
 
@@ -351,7 +388,32 @@ const app = {
                 </div>
             `).join('');
         },
-        
+
+        renderRecommendedModels(categories) {
+             const container = document.getElementById('browse-results');
+             if (!container) return;
+             
+             let html = '';
+             for (const [category, models] of Object.entries(categories)) {
+                 html += `<h4 class="text-indigo-400 font-bold text-md mt-6 mb-3 uppercase tracking-wider border-b border-gray-700 pb-1">${category}</h4>`;
+                 html += models.map(m => `
+                    <div class="bg-gray-800 p-4 rounded border border-gray-700 flex justify-between items-center hover:bg-gray-750 transition mb-2">
+                        <div class="flex-grow min-w-0 mr-4">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-white text-lg">${m.name}</h4>
+                                <span class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300">${m.id}</span>
+                            </div>
+                            <p class="text-sm text-gray-400 mt-1">${m.desc}</p>
+                        </div>
+                        <button onclick="app.selectModelFromHub('${m.id}')" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-4 rounded transition whitespace-nowrap">
+                            Pull
+                        </button>
+                    </div>
+                 `).join('');
+             }
+             container.innerHTML = html;
+        },
+
         formatNumber(num) {
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
@@ -364,16 +426,24 @@ const app = {
     // ------------------------------------------
     async init() {
         const loginForm = document.getElementById('login-form');
-        if (loginForm) loginForm.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => { e.preventDefault(); this.login(); });
+        }
 
         const togglePasswordBtn = document.getElementById('toggle-password-btn');
-        if (togglePasswordBtn) togglePasswordBtn.addEventListener('click', () => { this.togglePasswordVisibility(); });
+        if (togglePasswordBtn) {
+            togglePasswordBtn.addEventListener('click', () => { this.togglePasswordVisibility(); });
+        }
 
         const adminSettingsBtn = document.getElementById('admin-settings-btn');
-        if (adminSettingsBtn) adminSettingsBtn.addEventListener('click', () => this.openAdminSettingsModal());
+        if (adminSettingsBtn) {
+            adminSettingsBtn.addEventListener('click', () => this.openAdminSettingsModal());
+        }
 
         const saveAdminSettingsBtn = document.getElementById('save-admin-settings-btn');
-        if (saveAdminSettingsBtn) saveAdminSettingsBtn.addEventListener('click', () => this.changePassword());
+        if (saveAdminSettingsBtn) {
+            saveAdminSettingsBtn.addEventListener('click', () => this.changePassword());
+        }
 
         try {
             const auth = await this.api.get('/api/check-auth');
@@ -394,7 +464,7 @@ const app = {
         errorEl.classList.add('hidden');
         try {
             const res = await this.api.post('/api/login', { username, password });
-            if (res.success) await this.init();
+            if (res.success) { await this.init(); }
         } catch (e) { errorEl.textContent = 'Login failed: ' + e.message; errorEl.classList.remove('hidden'); }
     },
 
@@ -409,9 +479,8 @@ const app = {
                 this.state.refreshInterval = setInterval(() => { this.refreshStats(); this.loadModels(); }, 5000);
             }
         } catch (e) {
-            console.error("Dashboard load failed", e);
-            if (this.state.refreshInterval) clearInterval(this.state.refreshInterval);
-            this.state.refreshInterval = null;
+            console.error("Failed to load dashboard", e);
+            if (this.state.refreshInterval) clearInterval(this.state.refreshInterval); this.state.refreshInterval = null;
             this.logout();
         }
     },
@@ -432,15 +501,14 @@ const app = {
             this.ui.renderGpuList(gpus);
             this.ui.renderSystemInfo(sysInfo);
         } catch(e) {
-            console.error("Stats refresh failed", e);
-            clearInterval(this.state.refreshInterval);
-            this.state.refreshInterval = null;
+            console.error("Failed to refresh stats", e);
+            clearInterval(this.state.refreshInterval); this.state.refreshInterval = null;
         }
     },
 
     _listenToLogs(wsPath, modalTitle, onSpecialMessage = null) {
         this.ui.showLogModal(modalTitle);
-        if (this.state.logWs) this.state.logWs.close();
+        if (this.state.logWs) { this.state.logWs.close(); }
 
         const ws = new WebSocket(`ws://${window.location.host}${wsPath}`);
         this.state.logWs = ws;
@@ -460,14 +528,18 @@ const app = {
         };
         ws.onerror = () => this.ui.appendLog(`\n\n❌ WebSocket Error\n`);
         ws.onclose = () => {
-            if (this.state.logWs === ws) this.state.logWs = null;
-            if (wsPath.startsWith('/ws/pull') || wsPath.startsWith('/ws/upgrade')) this.loadDashboard();
+            if (this.state.logWs === ws) { 
+                this.state.logWs = null;
+            }
+            if (wsPath.startsWith('/ws/pull') || wsPath.startsWith('/ws/upgrade')) {
+                this.loadDashboard();
+            }
         };
     },
 
     async pullModel() {
         const hf_model_id = document.getElementById('hf-model-id').value;
-        if (!hf_model_id) return alert('Enter Model ID');
+        if (!hf_model_id) return alert('Please enter a HuggingFace Model ID.');
         try {
             const res = await this.api.post('/api/models/pull', { hf_model_id });
             this._listenToLogs(`/ws/pull/${res.model_id}`, `Downloading ${hf_model_id}`, (message) => {
@@ -475,7 +547,9 @@ const app = {
                 this.ui.appendLog(`\n\n✅ ${status}\n`);
                 this.state.logWs?.close();
             });
-        } catch (e) { alert('Download error: ' + e.message); }
+        } catch (e) {
+            alert('Error starting download: ' + e.message);
+        }
     },
 
     async scanModelsFolder() {
@@ -483,83 +557,138 @@ const app = {
             const res = await this.api.post('/api/models/scan');
             alert(res.message);
             this.loadDashboard();
-        } catch (e) { alert('Scan failed: ' + e.message); }
+        } catch (e) {
+            alert('Failed to scan models folder: ' + e.message);
+        }
     },
 
     async startModel(id) {
         try {
             const models = await this.api.get('/api/models');
             const model = models.find(m => m.id === id);
+            if (!model) throw new Error('Model not found');
+            
             await this.api.post(`/api/models/${id}/start`);
-            this.loadModels();
+            this.loadModels(); 
+
             this._listenToLogs(`/ws/logs/${id}`, `Starting ${model.name}`, (message) => {
                 const status = message.replaceAll('-', '').trim();
                 const isSuccess = status.includes("SUCCESS");
                 this.ui.appendLog(`\n\n${isSuccess ? '✅' : '❌'} ${status}\n`);
-                setTimeout(() => { this.hideLogModal(); this.loadDashboard(); }, 1500);
+                
+                setTimeout(() => {
+                    this.hideLogModal();
+                    this.loadDashboard();
+                }, 1500);
             });
-        } catch (e) { alert('Start failed: ' + e.message); this.loadModels(); }
+        } catch (e) {
+            alert('Failed to start model: ' + e.message);
+            this.loadModels();
+        }
     },
 
     async showRuntimeLogs(id) {
         try {
             const models = await this.api.get('/api/models');
             const model = models.find(m => m.id === id);
+            if (!model) throw new Error('Model not found');
             this._listenToLogs(`/ws/logs/${id}`, `Logs for ${model.name}`);
-        } catch (e) { alert('Logs error: ' + e.message); }
+        } catch (e) {
+            alert('Could not get logs: ' + e.message);
+        }
     },
 
     async stopModel(id) {
-        try { await this.api.post(`/api/models/${id}/stop`); this.loadDashboard(); }
-        catch (e) { alert('Stop failed: ' + e.message); }
+        try {
+            await this.api.post(`/api/models/${id}/stop`);
+            this.loadDashboard();
+        } catch (e) {
+            alert('Failed to stop model: ' + e.message);
+        }
     },
-
+    
     async encryptPassword(password) {
         if (!this.state.publicKey) {
             try {
                 const jwk = await this.api.get('/api/security/public-key');
-                this.state.publicKey = await window.crypto.subtle.importKey("jwk", jwk, { name: "RSA-OAEP", hash: "SHA-256" }, true, ["encrypt"]);
-            } catch (e) { throw new Error("Encryption error"); }
+                this.state.publicKey = await window.crypto.subtle.importKey(
+                    "jwk",
+                    jwk,
+                    {
+                        name: "RSA-OAEP",
+                        hash: "SHA-256"
+                    },
+                    true,
+                    ["encrypt"]
+                );
+            } catch (e) {
+                console.error("Failed to load encryption key:", e);
+                throw new Error("Encryption not supported by server or network error.");
+            }
         }
-        const encoded = new TextEncoder().encode(password);
-        const encrypted = await window.crypto.subtle.encrypt({ name: "RSA-OAEP" }, this.state.publicKey, encoded);
+
+        const enc = new TextEncoder();
+        const encoded = enc.encode(password);
+        
+        const encrypted = await window.crypto.subtle.encrypt(
+            {
+                name: "RSA-OAEP"
+            },
+            this.state.publicKey,
+            encoded
+        );
+        
         return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
     },
 
     async killGpuProcess(pid) {
-        if (confirm(`KILL process ${pid}?`)) {
+        if (confirm(`Are you sure you want to KILL process ${pid}? This may be an external process.`)) {
             try {
                 await this.api.post(`/api/gpus/kill/${pid}`, {});
-                alert('Killed.'); this.refreshStats();
+                alert('Process killed.');
+                this.refreshStats();
             } catch (e) {
-                if (e.message.includes('Sudo') || e.message.includes('Permission')) {
-                    const password = prompt("Permission denied. Enter sudo password:");
+                if (e.message.includes('Sudo password required') || e.message.includes('Permission denied')) {
+                    const password = prompt("Permission denied. This process requires root privileges.\nPlease enter sudo password (encrypted transmission):");
                     if (password) {
                         try {
-                             const enc = await this.encryptPassword(password);
-                             await this.api.post(`/api/gpus/kill/${pid}`, { encrypted_sudo_password: enc });
-                             alert('Killed via sudo.'); this.refreshStats();
-                        } catch (e2) { alert('Sudo kill failed: ' + e2.message); }
+                             const encryptedPass = await this.encryptPassword(password);
+                             await this.api.post(`/api/gpus/kill/${pid}`, { encrypted_sudo_password: encryptedPass });
+                             alert('Process killed via sudo.');
+                             this.refreshStats();
+                        } catch (e2) {
+                            alert('Failed to kill process: ' + e2.message);
+                        }
                     }
-                } else { alert('Kill failed: ' + e.message); }
+                } else {
+                    alert('Failed to kill process: ' + e.message);
+                }
             }
         }
     },
 
     async deleteModel(id) {
-        if (confirm('Delete model files? Irreversible.')) {
-            try { await this.api.del(`/api/models/${id}`); this.loadDashboard(); }
-            catch (e) { alert('Delete failed: ' + e.message); }
+        if (confirm('Are you sure you want to delete this model and its files? This is irreversible.')) {
+            try {
+                await this.api.del(`/api/models/${id}`);
+                this.loadDashboard();
+            } catch (e) {
+                alert('Failed to delete model: ' + e.message);
+            }
         }
     },
 
     async clearError(id) {
-        try { await this.api.post(`/api/models/${id}/clear_error`); this.loadDashboard(); }
-        catch (e) { alert('Clear failed: ' + e.message); }
+        try {
+            await this.api.post(`/api/models/${id}/clear_error`);
+            this.loadDashboard();
+        } catch (e) {
+            alert('Failed to clear error state: ' + e.message);
+        }
     },
 
     async upgradeVLLM() {
-        if (confirm('Upgrade vLLM?')) {
+        if (confirm('This will upgrade vLLM and may require a manager restart. Proceed?')) {
             try {
                 await this.api.post('/api/system/upgrade');
                 this._listenToLogs('/ws/upgrade', 'Upgrading vLLM', (message) => {
@@ -567,38 +696,63 @@ const app = {
                      this.ui.appendLog(`\n\n✅ ${status}\n`);
                      this.state.logWs?.close();
                 });
-            } catch (e) { alert('Upgrade failed: ' + e.message); }
+            } catch (e) {
+                alert('Failed to start upgrade: ' + e.message);
+            }
         }
     },
 
     togglePasswordVisibility() {
-        const pass = document.getElementById('password');
-        const open = document.getElementById('eye-open-icon');
-        const closed = document.getElementById('eye-closed-icon');
-        if (pass.type === 'password') { pass.type = 'text'; open.classList.add('hidden'); closed.classList.remove('hidden'); }
-        else { pass.type = 'password'; open.classList.remove('hidden'); closed.classList.add('hidden'); }
+        const passwordInput = document.getElementById('password');
+        const eyeOpen = document.getElementById('eye-open-icon');
+        const eyeClosed = document.getElementById('eye-closed-icon');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeOpen.classList.add('hidden');
+            eyeClosed.classList.remove('hidden');
+        } else {
+            passwordInput.type = 'password';
+            eyeOpen.classList.remove('hidden');
+            eyeClosed.classList.add('hidden');
+        }
     },
 
     async openEditModal(modelId) {
         try {
-            const [models, gpus] = await Promise.all([this.api.get('/api/models'), this.api.get('/api/gpus')]);
-            const model = models.find(m => m.id === modelId);
-            if (!model) return alert('Model not found');
+            const [models, gpus] = await Promise.all([
+                this.api.get('/api/models'),
+                this.api.get('/api/gpus')
+            ]);
             
-            const container = document.getElementById('gpu-selection-container');
-            if (gpus.length === 0) container.innerHTML = '<span class="text-red-400 text-xs">No GPUs</span>';
-            else {
-                const current = (model.config.gpu_ids || "").split(',').map(s => s.trim());
-                container.innerHTML = gpus.map(g => `
-                    <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-600 p-1 rounded">
-                        <input type="checkbox" class="gpu-checkbox form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-500 rounded" value="${g.id}" ${current.includes(String(g.id)) ? 'checked' : ''} onchange="app.updateTP()">
-                        <span class="text-sm text-gray-200">GPU ${g.id}</span>
-                    </label>
-                `).join('');
+            const model = models.find(m => m.id === modelId);
+            if (!model) {
+                alert('Model not found!');
+                return;
+            }
+
+            const gpuContainer = document.getElementById('gpu-selection-container');
+            if (gpus.length === 0) {
+                gpuContainer.innerHTML = '<span class="text-red-400 text-xs">No GPUs detected!</span>';
+            } else {
+                const currentGpuIds = (model.config.gpu_ids || "").split(',').map(s => s.trim());
+                gpuContainer.innerHTML = gpus.map(g => {
+                    const isChecked = currentGpuIds.includes(String(g.id));
+                    return `
+                        <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-600 p-1 rounded">
+                            <input type="checkbox" 
+                                   class="gpu-checkbox form-checkbox h-4 w-4 text-indigo-600 bg-gray-800 border-gray-500 rounded focus:ring-indigo-500" 
+                                   value="${g.id}" 
+                                   ${isChecked ? 'checked' : ''}
+                                   onchange="app.updateTensorParallelFromSelection()">
+                            <span class="text-sm text-gray-200">GPU ${g.id}</span>
+                        </label>
+                    `;
+                }).join('');
             }
 
             document.getElementById('edit-model-id').value = model.id;
             document.getElementById('edit-modal-title').textContent = `Edit: ${model.name}`;
+            document.getElementById('edit-gpu-ids').value = model.config.gpu_ids || '0';
             document.getElementById('edit-gpu-mem').value = model.config.gpu_memory_utilization;
             document.getElementById('edit-tensor-parallel').value = model.config.tensor_parallel_size;
             document.getElementById('edit-max-len').value = model.config.max_model_len;
@@ -608,24 +762,37 @@ const app = {
             document.getElementById('edit-prefix-caching').checked = model.config.enable_prefix_caching;
             
             this.ui.showEditModal();
-            this.updateTP();
-        } catch (e) { alert('Edit error: ' + e.message); }
+            this.updateTensorParallelFromSelection();
+
+        } catch (e) {
+            alert('Could not fetch model details: ' + e.message);
+        }
     },
 
-    updateTP() {
-        const count = document.querySelectorAll('.gpu-checkbox:checked').length;
-        document.getElementById('edit-tensor-parallel').value = count > 0 ? count : 1;
+    updateTensorParallelFromSelection() {
+        const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
+        const count = checkboxes.length;
+        const tpInput = document.getElementById('edit-tensor-parallel');
+        tpInput.value = count > 0 ? count : 1;
     },
 
     async saveModelConfig() {
-        const id = document.getElementById('edit-model-id').value;
-        const gpus = Array.from(document.querySelectorAll('.gpu-checkbox:checked')).map(c => c.value).join(',');
-        if (!gpus) return alert("Select at least one GPU");
+        const modelId = document.getElementById('edit-model-id').value;
         
+        const checkboxes = document.querySelectorAll('.gpu-checkbox:checked');
+        const selectedGpuIds = Array.from(checkboxes).map(cb => cb.value).join(',');
+        
+        if (!selectedGpuIds) {
+            alert("Please select at least one GPU.");
+            return;
+        }
+
+        const tpSize = checkboxes.length;
+
         const config = {
-            gpu_ids: gpus,
+            gpu_ids: selectedGpuIds,
             gpu_memory_utilization: parseFloat(document.getElementById('edit-gpu-mem').value),
-            tensor_parallel_size: document.querySelectorAll('.gpu-checkbox:checked').length,
+            tensor_parallel_size: tpSize,
             max_model_len: parseInt(document.getElementById('edit-max-len').value),
             dtype: document.getElementById('edit-dtype').value,
             quantization: document.getElementById('edit-quantization').value || null,
@@ -633,8 +800,13 @@ const app = {
             enable_prefix_caching: document.getElementById('edit-prefix-caching').checked
         };
 
-        try { await this.api.put(`/api/models/${id}/config`, config); this.ui.hideEditModal(); this.loadModels(); }
-        catch (e) { alert('Save failed: ' + e.message); }
+        try {
+            await this.api.put(`/api/models/${modelId}/config`, config);
+            this.ui.hideEditModal();
+            this.loadModels();
+        } catch (e) {
+            alert('Failed to save configuration: ' + e.message);
+        }
     },
 
     // ----------------------------------------------------------------
@@ -644,64 +816,41 @@ const app = {
         const modal = document.getElementById('browse-modal');
         if (modal) {
             modal.classList.remove('hidden');
-            // Load recommended by default if empty or previously showing recommended
             const container = document.getElementById('browse-results');
-            if (!container.innerHTML.includes('Pull') || container.innerHTML.includes('Recommended')) {
+            if (!container.innerHTML.trim() || container.innerHTML.includes('Search failed') || container.innerHTML.includes('No models found')) {
                 this.loadRecommendedModels();
             }
         }
     },
 
-    hideBrowseModal() { document.getElementById('browse-modal').classList.add('hidden'); },
+    hideBrowseModal() {
+        document.getElementById('browse-modal').classList.add('hidden');
+    },
 
     async loadRecommendedModels() {
         const container = document.getElementById('browse-results');
-        container.innerHTML = '<div class="text-center text-gray-400 mt-10">Loading recommended models...</div>';
+        container.innerHTML = '<div class="text-center text-gray-400 mt-4">Loading recommended models...</div>';
         
         try {
-            // Fetch from static JSON file
             const res = await fetch('/static/models.json');
-            if (!res.ok) throw new Error("Failed to load models.json");
+            if (!res.ok) throw new Error("Failed to load recommended models.");
             const data = await res.json();
-            this.renderRecommendedModels(data);
+            this.ui.renderRecommendedModels(data);
         } catch (e) {
-             container.innerHTML = `<div class="text-center text-red-400 mt-10">Could not load recommended models. Use search above.<br><span class="text-xs">${e.message}</span></div>`;
+             container.innerHTML = `<div class="text-center text-red-400 mt-4">Error loading recommendations: ${e.message}</div>`;
         }
-    },
-
-    renderRecommendedModels(categories) {
-        const container = document.getElementById('browse-results');
-        if (!container) return;
-        
-        let html = '';
-        for (const [category, models] of Object.entries(categories)) {
-            html += `<h4 class="text-indigo-400 font-bold text-md mt-6 mb-3 uppercase tracking-wider border-b border-gray-700 pb-1">${category}</h4>`;
-            html += models.map(m => `
-                <div class="bg-gray-800 p-4 rounded border border-gray-700 flex justify-between items-center hover:bg-gray-750 transition mb-2">
-                    <div class="flex-grow min-w-0 mr-4">
-                        <div class="flex items-center gap-2">
-                            <h4 class="font-bold text-white text-lg">${m.name}</h4>
-                            <span class="text-xs bg-gray-700 px-2 py-0.5 rounded text-gray-300">${m.id}</span>
-                        </div>
-                        <p class="text-sm text-gray-400 mt-1">${m.desc}</p>
-                    </div>
-                    <button onclick="app.selectModelFromHub('${m.id}')" class="bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold py-2 px-4 rounded transition whitespace-nowrap">
-                        Pull
-                    </button>
-                </div>
-            `).join('');
-        }
-        container.innerHTML = html;
     },
 
     async searchHub() {
-        const query = document.getElementById('browse-search').value;
-        if (!query) {
-            // If search cleared, show recommended again
+        const query = document.getElementById('browse-search').value.trim();
+        const filter = document.getElementById('browse-filter').value;
+        
+        // If neither query nor filter is set, show recommended. 
+        // If filter is set but query is empty, we allow searching (e.g. all "awq" models)
+        if (!query && !filter) {
             return this.loadRecommendedModels();
         }
-        
-        const filter = document.getElementById('browse-filter').value;
+
         const container = document.getElementById('browse-results');
         container.innerHTML = '<div class="text-center text-gray-400 mt-10"><svg class="animate-spin h-8 w-8 text-indigo-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Searching Hugging Face...</div>';
 
@@ -709,7 +858,7 @@ const app = {
             const params = new URLSearchParams();
             if (query) params.append('query', query);
             if (filter) params.append('filter_type', filter);
-
+            
             const results = await this.api.get(`/api/hub/search?${params.toString()}`);
             this.ui.renderHubResults(results);
         } catch (e) {
@@ -725,26 +874,66 @@ const app = {
         }
     },
 
-    hideLogModal() { this.ui.hideLogModal(); },
-    copyLog() { this.ui.copyLog(); },
-    saveLog() { this.ui.saveLog(); },
-    hideEditModal() { this.ui.hideEditModal(); },
-    openAdminSettingsModal() { this.ui.showAdminSettingsModal(); this.ui.renderAdminSettings({is_password_env_managed: false}); app.api.get('/api/admin/settings').then(s => this.ui.renderAdminSettings(s)); },
-    hideAdminSettingsModal() { this.ui.hideAdminSettingsModal(); },
+    hideLogModal() {
+        this.ui.hideLogModal();
+    },
+
+    copyLog() {
+        this.ui.copyLog();
+    },
+    
+    saveLog() {
+        this.ui.saveLog();
+    },
+
+    hideEditModal() {
+        this.ui.hideEditModal();
+    },
+
+    async openAdminSettingsModal() {
+        try {
+            const settings = await this.api.get('/api/admin/settings');
+            this.ui.renderAdminSettings(settings);
+            this.ui.showAdminSettingsModal();
+        } catch (e) {
+            alert('Could not load admin settings: ' + e.message);
+        }
+    },
+
+    hideAdminSettingsModal() {
+        this.ui.hideAdminSettingsModal();
+    },
 
     async changePassword() {
-        const cur = document.getElementById('current-password').value;
-        const newP = document.getElementById('new-password').value;
-        const conf = document.getElementById('confirm-password').value;
-        const err = document.getElementById('password-change-error');
-        err.classList.add('hidden');
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        const errorEl = document.getElementById('password-change-error');
+        
+        if (!errorEl) return;
+        errorEl.classList.add('hidden');
 
-        if (!newP || newP !== conf) { err.textContent = 'Passwords do not match'; err.classList.remove('hidden'); return; }
-        if (!cur) { err.textContent = 'Current password required'; err.classList.remove('hidden'); return; }
+        if (!newPassword || newPassword !== confirmPassword) {
+            errorEl.textContent = 'New passwords do not match or are empty.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+        if (!currentPassword) {
+            errorEl.textContent = 'Current password is required.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
 
         try {
-            await this.api.post('/api/admin/change-password', { current_password: cur, new_password: newP });
-            alert('Password changed'); this.hideAdminSettingsModal();
-        } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
+            await this.api.post('/api/admin/change-password', {
+                current_password: currentPassword,
+                new_password: newPassword
+            });
+            alert('Password changed successfully!');
+            this.hideAdminSettingsModal();
+        } catch (e) {
+            errorEl.textContent = 'Failed to change password: ' + e.message;
+            errorEl.classList.remove('hidden');
+        }
     }
 };
