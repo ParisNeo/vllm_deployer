@@ -693,6 +693,7 @@ async def search_hub(
     if filter_type == "awq": search_text += " awq"
     elif filter_type == "gptq": search_text += " gptq"
     elif filter_type == "gguf": search_text += " gguf"
+    elif filter_type == "compressed-tensors": search_text += " compressed-tensors"
     
     if search_text.strip():
         search_params["search"] = search_text.strip()
